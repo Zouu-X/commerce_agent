@@ -1,0 +1,68 @@
+:root {
+  color: #18231d;
+  background: #eef3ee;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.card {
+  width: min(680px, 100%);
+  padding: clamp(32px, 7vw, 72px);
+  border: 1px solid #cad5cb;
+  border-radius: 28px;
+  background: #f9fbf8;
+  box-shadow: 0 24px 80px rgb(39 63 48 / 10%);
+}
+
+.eyebrow {
+  color: #39744f;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+}
+
+h1 {
+  margin: 16px 0;
+  font-size: clamp(36px, 7vw, 64px);
+  line-height: 1.05;
+  letter-spacing: -0.045em;
+}
+
+.card > p:not(.eyebrow) {
+  color: #536258;
+  font-size: 18px;
+  line-height: 1.75;
+}
+
+a {
+  display: inline-block;
+  margin-top: 16px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  color: white;
+  background: #28633f;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+a:hover {
+  background: #194d2f;
+}
