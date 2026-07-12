@@ -843,15 +843,15 @@ MVP 完成后按优先级考虑：
 
 ## 21. 第一周任务清单
 
-- [ ] 确定项目名称和仓库结构；
-- [ ] 初始化 FastAPI、React、PostgreSQL 和 Docker Compose；
-- [ ] 配置 Ruff、mypy/pyright、pytest 和 GitHub Actions；
-- [ ] 创建 tenant、store、customer、product、order、shipment 表；
-- [ ] 编写两家店铺的确定性模拟数据；
-- [ ] 实现商品、订单和物流查询服务；
-- [ ] 实现租户与顾客归属校验；
-- [ ] 为跨顾客订单访问编写失败测试；
-- [ ] 提供 `make up`、`make seed`、`make test` 命令；
-- [ ] 在 README 中记录启动方式和第一版架构。
+- [x] 确定项目名称和仓库结构；
+- [x] 初始化 FastAPI、React、PostgreSQL 和 Docker Compose；
+- [x] 配置 Ruff、mypy/pyright、pytest 和 GitHub Actions；
+- [x] 创建 tenant、store、customer、product、order、shipment 表；
+- [x] 编写两家店铺的确定性模拟数据；
+- [x] 实现商品、订单和物流查询服务；
+- [x] 实现租户与顾客归属校验；
+- [x] 为跨顾客订单访问编写失败测试；
+- [x] 提供 `make up`、`make seed`、`make test` 命令；
+- [x] 在 README 中记录启动方式和第一版架构。
 
 第一周结束时，应拥有一个不依赖 LLM、但领域模型和安全边界已经正确的电商业务沙盒。Agent 能力从第二周开始接入。
