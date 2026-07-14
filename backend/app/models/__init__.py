@@ -1,6 +1,8 @@
 from app.models.commerce import (
     AfterSale,
+    Conversation,
     Customer,
+    Message,
     Order,
     OrderItem,
     Product,
@@ -13,7 +15,9 @@ from app.models.commerce import (
 
 __all__ = [
     "AfterSale",
+    "Conversation",
     "Customer",
+    "Message",
     "Order",
     "OrderItem",
     "Product",

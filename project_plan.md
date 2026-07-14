@@ -727,11 +727,11 @@ commerce-support-agent/
 
 ### 里程碑 2：Agent 与只读工具（4～5 天）
 
-- 实现模型 Provider 抽象；
-- 实现 tool registry 和 `ToolContext`；
-- 实现 tool-calling loop、循环限制和超时；
-- 接入商品、订单、物流和售后只读工具；
-- 完整保存 user、assistant、tool 消息。
+- [x] 实现模型 Provider 抽象；
+- [x] 实现 tool registry 和 `ToolContext`；
+- [x] 实现 tool-calling loop、循环限制和超时；
+- [x] 接入商品、订单、物流和售后只读工具；
+- [x] 完整保存 user、assistant、tool 消息。
 
 **验收标准：** Agent 能完成商品咨询、订单查询和物流异常三条端到端流程，且无法跨顾客访问订单。
 

@@ -1,6 +1,7 @@
 # Commerce Support Agent
 
-一个可评测、可观测的多租户电商客服 Agent 沙盒。项目当前已具备确定性电商业务沙盒，详细范围见
+一个可评测、可观测的多租户电商客服 Agent 沙盒。项目当前已具备确定性电商业务沙盒、
+Provider-independent Agent Runtime 和 6 个安全只读工具，详细范围见
 [`project_plan.md`](./project_plan.md)。
 
 ## 环境要求
@@ -70,6 +71,74 @@ curl \
 - `GET /api/v1/orders/{order_number}/shipment`
 - `GET /api/v1/orders/{order_number}/eligibility`
 - `GET /api/v1/after-sales/{after_sale_id}`
+
+## Agent 对话 Demo
+
+默认使用确定性的本地 Mock Provider，因此不配置模型 API Key 也能演示完整 tool-calling 流程。
+Mock 只负责模拟模型的意图识别和回复生成，商品、订单、物流和售后事实仍然来自 PostgreSQL
+及业务服务层。
+
+先用 `/api/v1/demo/contexts` 选择 tenant、store 和 customer，再创建会话：
+
+```bash
+curl -X POST \
+  -H 'X-Tenant-Id: 8741aaf7-d17d-523d-9f6a-f534109d7848' \
+  -H 'X-Store-Id: 46267c0e-11d5-5634-9629-07f8f307c42d' \
+  -H 'X-Customer-Id: 0d1ed7e7-59ab-50e6-9d62-faa77e406b84' \
+  http://localhost:8000/api/v1/conversations
+```
+
+使用返回的 `conversation_id` 发送消息：
+
+```bash
+curl -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'X-Tenant-Id: 8741aaf7-d17d-523d-9f6a-f534109d7848' \
+  -H 'X-Store-Id: 46267c0e-11d5-5634-9629-07f8f307c42d' \
+  -H 'X-Customer-Id: 0d1ed7e7-59ab-50e6-9d62-faa77e406b84' \
+  --data '{"content":"请推荐有库存的降噪耳机"}' \
+  http://localhost:8000/api/v1/conversations/<conversation_id>/messages
+```
+
+可演示的消息包括：
+
+- `请推荐有库存的降噪耳机`
+- `帮我查订单 AUR-202607-0001`
+- `订单 AUR-202607-0005 的物流怎么还没更新？`（需要选择该订单所属顾客）
+
+读取会话可以看到完整的 `user -> assistant(tool_calls) -> tool -> assistant` 消息链：
+
+```bash
+curl \
+  -H 'X-Tenant-Id: ...' \
+  -H 'X-Store-Id: ...' \
+  -H 'X-Customer-Id: ...' \
+  http://localhost:8000/api/v1/conversations/<conversation_id>
+```
+
+当前只读工具：
+
+- `search_products`
+- `get_product_details`
+- `get_customer_orders`
+- `get_order_details`
+- `track_shipment`
+- `get_after_sale_status`
+
+身份字段不会出现在工具参数 Schema 中。`tenant_id`、`store_id`、`customer_id`、
+`conversation_id` 和 `trace_id` 均由服务端注入，模型无法覆盖。
+
+### 切换到 OpenAI-compatible Provider
+
+```dotenv
+MODEL_PROVIDER=openai_compatible
+MODEL_NAME=<provider-model-name>
+MODEL_BASE_URL=https://api.openai.com/v1
+MODEL_API_KEY=<provider-api-key>
+```
+
+适配层使用 Chat Completions 风格的 `messages`、`tools` 和 `tool_calls` 契约；Runtime、
+工具注册表和业务服务不依赖具体模型 SDK。
 
 重置为完全一致的 Demo 数据状态：
 
