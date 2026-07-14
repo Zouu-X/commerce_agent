@@ -33,6 +33,7 @@ class Tenant(Base):
 
     stores: Mapped[list[Store]] = relationship(back_populates="tenant")
     customers: Mapped[list[Customer]] = relationship(back_populates="tenant")
+    conversations: Mapped[list[Conversation]] = relationship(back_populates="tenant")
 
 
 class Store(Base):
@@ -50,6 +51,7 @@ class Store(Base):
     tenant: Mapped[Tenant] = relationship(back_populates="stores")
     products: Mapped[list[Product]] = relationship(back_populates="store")
     orders: Mapped[list[Order]] = relationship(back_populates="store")
+    conversations: Mapped[list[Conversation]] = relationship(back_populates="store")
 
 
 class Customer(Base):
@@ -66,6 +68,7 @@ class Customer(Base):
 
     tenant: Mapped[Tenant] = relationship(back_populates="customers")
     orders: Mapped[list[Order]] = relationship(back_populates="customer")
+    conversations: Mapped[list[Conversation]] = relationship(back_populates="customer")
 
 
 class Product(Base):
@@ -225,3 +228,67 @@ class AfterSale(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     order: Mapped[Order] = relationship(back_populates="after_sales")
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+    __table_args__ = (
+        Index(
+            "ix_conversations_context_created",
+            "tenant_id",
+            "store_id",
+            "customer_id",
+            "created_at",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), index=True
+    )
+    store_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("stores.id", ondelete="CASCADE"), index=True
+    )
+    customer_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("customers.id", ondelete="CASCADE"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(32), default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    tenant: Mapped[Tenant] = relationship(back_populates="conversations")
+    store: Mapped[Store] = relationship(back_populates="conversations")
+    customer: Mapped[Customer] = relationship(back_populates="conversations")
+    messages: Mapped[list[Message]] = relationship(
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="Message.sequence",
+    )
+
+
+class Message(Base):
+    __tablename__ = "messages"
+    __table_args__ = (
+        UniqueConstraint("conversation_id", "sequence"),
+        CheckConstraint("sequence > 0", name="sequence_positive"),
+        CheckConstraint(
+            "role IN ('user', 'assistant', 'tool')",
+            name="valid_role",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), index=True
+    )
+    sequence: Mapped[int] = mapped_column()
+    role: Mapped[str] = mapped_column(String(16))
+    content: Mapped[str] = mapped_column(Text, default="")
+    tool_call_id: Mapped[str | None] = mapped_column(String(160))
+    tool_name: Mapped[str | None] = mapped_column(String(80))
+    tool_calls_json: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    conversation: Mapped[Conversation] = relationship(back_populates="messages")

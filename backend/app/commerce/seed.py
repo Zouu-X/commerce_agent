@@ -13,7 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import SessionFactory
 from app.models import (
     AfterSale,
+    Conversation,
     Customer,
+    Message,
     Order,
     OrderItem,
     Product,
@@ -34,6 +36,8 @@ def stable_id(key: str) -> uuid.UUID:
 
 async def clear_commerce_data(session: AsyncSession) -> None:
     for model in (
+        Message,
+        Conversation,
         ShipmentEvent,
         AfterSale,
         Shipment,
