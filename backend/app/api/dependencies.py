@@ -8,6 +8,7 @@ from app.agent.provider import MockCommerceProvider, ModelProvider, OpenAICompat
 from app.approvals.context import ApprovalContext
 from app.commerce.context import CommerceContext
 from app.core.config import get_settings
+from app.observability.context import TraceContext
 
 
 async def get_commerce_context(
@@ -32,6 +33,13 @@ async def get_approval_context(
         store_id=store_id,
         approver_id=approver_id,
     )
+
+
+async def get_trace_context(
+    tenant_id: Annotated[UUID, Header(alias="X-Tenant-Id")],
+    store_id: Annotated[UUID, Header(alias="X-Store-Id")],
+) -> TraceContext:
+    return TraceContext(tenant_id=tenant_id, store_id=store_id)
 
 
 async def get_model_provider() -> ModelProvider:

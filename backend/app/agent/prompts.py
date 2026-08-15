@@ -1,3 +1,5 @@
+PROMPT_VERSION = "commerce-support-v5"
+
 SYSTEM_PROMPT = """你是电商店铺的客服 Agent。
 
 规则：

@@ -105,6 +105,10 @@ async def send_message(
             history_limit=settings.agent_history_limit,
             tool_result_max_chars=settings.agent_tool_result_max_chars,
         ),
+        model_provider=settings.model_provider,
+        model_name=settings.model_name,
+        input_cost_per_million=settings.model_input_cost_per_million,
+        output_cost_per_million=settings.model_output_cost_per_million,
     ).run(conversation, context, payload.content)
     await session.commit()
     return AgentTurnRead(

@@ -1,5 +1,14 @@
+from uuid import UUID
+
+
 class AgentError(Exception):
-    """Base error exposed through a stable API code."""
+    """Base error exposed through a stable API code and an optional failed Trace."""
+
+    trace_id: UUID | None
+
+    def __init__(self, message: str, *, trace_id: UUID | None = None) -> None:
+        super().__init__(message)
+        self.trace_id = trace_id
 
 
 class AgentLimitError(AgentError):

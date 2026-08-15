@@ -233,7 +233,9 @@ class MockCommerceProvider:
             if order_number:
                 coupon_arguments["order_number"] = order_number
             return self._call(call_id, "request_coupon", coupon_arguments)
-        if order_number and any(word in user_text for word in ("物流", "快递", "到哪", "发货")):
+        if order_number and any(
+            word in user_text for word in ("物流", "快递", "到哪", "发货", "配送")
+        ):
             return self._call(call_id, "track_shipment", {"order_number": order_number})
         if order_number:
             return self._call(call_id, "get_order_details", {"order_number": order_number})
@@ -252,7 +254,18 @@ class MockCommerceProvider:
 
         if any(
             word in user_text
-            for word in ("商品", "推荐", "耳机", "键盘", "鼠标", "背包", "杯", "鞋", "伞")
+            for word in (
+                "商品",
+                "推荐",
+                "现货",
+                "耳机",
+                "键盘",
+                "鼠标",
+                "背包",
+                "杯",
+                "鞋",
+                "伞",
+            )
         ):
             product_arguments: dict[str, Any] = {"in_stock": True, "limit": 5}
             for term in ("耳机", "键盘", "鼠标", "背包", "保温杯", "跑鞋", "晴雨伞"):

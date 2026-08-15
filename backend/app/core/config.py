@@ -1,3 +1,4 @@
+from decimal import Decimal
 from functools import lru_cache
 
 from pydantic import Field, SecretStr
@@ -11,6 +12,8 @@ class Settings(BaseSettings):
     model_name: str = "mock-commerce-agent"
     model_base_url: str = "https://api.openai.com/v1"
     model_api_key: SecretStr | None = None
+    model_input_cost_per_million: Decimal = Field(default=Decimal("0"), ge=0)
+    model_output_cost_per_million: Decimal = Field(default=Decimal("0"), ge=0)
     model_timeout_seconds: float = Field(default=30.0, gt=0)
     agent_total_timeout_seconds: float = Field(default=45.0, gt=0)
     agent_tool_timeout_seconds: float = Field(default=10.0, gt=0)
