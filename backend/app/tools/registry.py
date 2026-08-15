@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agent.types import ToolSpec
 from app.commerce.errors import ResourceNotFoundError
 from app.tools.context import ToolContext
+from app.tools.knowledge_tools import KnowledgeToolHandlers, SearchStorePolicyArgs
 from app.tools.read_tools import (
     GetAfterSaleStatusArgs,
     GetCustomerOrdersArgs,
@@ -77,6 +78,7 @@ class ToolRegistry:
 
 def build_read_tool_registry(session: AsyncSession, context: ToolContext) -> ToolRegistry:
     handlers = ReadToolHandlers(session, context)
+    knowledge_handlers = KnowledgeToolHandlers(session, context)
     registry = ToolRegistry()
     for tool in (
         RegisteredTool(
@@ -114,6 +116,12 @@ def build_read_tool_registry(session: AsyncSession, context: ToolContext) -> Too
             "按售后申请 ID 查询当前顾客的售后状态。",
             GetAfterSaleStatusArgs,
             handlers.get_after_sale_status,
+        ),
+        RegisteredTool(
+            "search_store_policy",
+            "检索当前店铺有效的退换货、发货、物流、补偿政策或商品使用指南，并返回引用。",
+            SearchStorePolicyArgs,
+            knowledge_handlers.search_store_policy,
         ),
     ):
         registry.register(tool)

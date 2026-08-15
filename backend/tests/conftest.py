@@ -3,7 +3,7 @@ from collections.abc import AsyncIterator
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.commerce.seed import build_seed_objects
+from app.commerce.seed import build_knowledge_objects, build_seed_objects
 from app.db.base import Base
 
 
@@ -20,7 +20,7 @@ async def db_session() -> AsyncIterator[AsyncSession]:
 
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     async with session_factory() as session:
-        session.add_all(build_seed_objects()[0])
+        session.add_all([*build_seed_objects()[0], *build_knowledge_objects()[0]])
         await session.commit()
         yield session
 

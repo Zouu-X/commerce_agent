@@ -12,4 +12,5 @@ frontend/dist/
 
 .coverage
 htmlcov/
-logs/
+logs/*
+!logs/milestone-*.md

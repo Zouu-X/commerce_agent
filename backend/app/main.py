@@ -12,6 +12,7 @@ from app.agent.errors import (
 )
 from app.api.agent import router as agent_router
 from app.api.commerce import router as commerce_router
+from app.api.knowledge import router as knowledge_router
 from app.commerce.errors import ResourceNotFoundError
 from app.db.session import engine
 
@@ -31,6 +32,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(agent_router)
     app.include_router(commerce_router)
+    app.include_router(knowledge_router)
 
     @app.exception_handler(ResourceNotFoundError)
     async def resource_not_found(_request: Request, error: ResourceNotFoundError) -> JSONResponse:

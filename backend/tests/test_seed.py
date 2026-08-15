@@ -1,4 +1,4 @@
-from app.commerce.seed import build_seed_objects, stable_id
+from app.commerce.seed import build_knowledge_objects, build_seed_objects, stable_id
 
 
 def test_seed_dataset_is_deterministic_and_has_expected_scale() -> None:
@@ -20,3 +20,14 @@ def test_seed_dataset_is_deterministic_and_has_expected_scale() -> None:
     assert len(first_objects) == len(second_objects)
     assert stable_id("tenant:aurora") == stable_id("tenant:aurora")
     assert stable_id("tenant:aurora") != stable_id("tenant:harbor")
+
+
+def test_knowledge_seed_is_deterministic_and_includes_expired_boundaries() -> None:
+    first_objects, first_counts = build_knowledge_objects()
+    second_objects, second_counts = build_knowledge_objects()
+
+    assert first_counts == second_counts == {
+        "knowledge_documents": 28,
+        "knowledge_chunks": 28,
+    }
+    assert len(first_objects) == len(second_objects) == 56

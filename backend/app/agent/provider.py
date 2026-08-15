@@ -150,6 +150,32 @@ class MockCommerceProvider:
         r"-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?![0-9a-f])",
         re.IGNORECASE,
     )
+    _explicit_knowledge_terms = ("政策", "规则", "时效")
+    _knowledge_terms = (
+        "政策",
+        "无理由",
+        "退货",
+        "退款多久到账",
+        "到账",
+        "发货时效",
+        "什么时候发货",
+        "发货",
+        "物流",
+        "配送失败",
+        "没更新",
+        "保价",
+        "价保",
+        "降价",
+        "差价",
+        "差额",
+        "补偿",
+        "换货",
+        "质保",
+        "保修",
+        "保养",
+        "清洁",
+        "忽略系统指令",
+    )
 
     async def complete(
         self,
@@ -171,6 +197,10 @@ class MockCommerceProvider:
         order_number = order_match.group(0).upper() if order_match else None
         call_id = f"mock_{uuid4().hex}"
 
+        # Explicit policy/rule questions describe the requested evidence source,
+        # even when an order number or a logistics keyword is also present.
+        if any(word in user_text for word in self._explicit_knowledge_terms):
+            return self._knowledge_call(call_id, user_text)
         if order_number and any(word in user_text for word in ("物流", "快递", "到哪", "发货")):
             return self._call(call_id, "track_shipment", {"order_number": order_number})
         if order_number:
@@ -183,6 +213,8 @@ class MockCommerceProvider:
                 "get_after_sale_status",
                 {"after_sale_id": after_sale_id.group(0)},
             )
+        if any(word in user_text for word in self._knowledge_terms):
+            return self._knowledge_call(call_id, user_text)
         if any(word in user_text for word in ("订单", "购买记录")):
             return self._call(call_id, "get_customer_orders", {"limit": 10})
 
@@ -190,16 +222,16 @@ class MockCommerceProvider:
             word in user_text
             for word in ("商品", "推荐", "耳机", "键盘", "鼠标", "背包", "杯", "鞋", "伞")
         ):
-            arguments: dict[str, Any] = {"in_stock": True, "limit": 5}
+            product_arguments: dict[str, Any] = {"in_stock": True, "limit": 5}
             for term in ("耳机", "键盘", "鼠标", "背包", "保温杯", "跑鞋", "晴雨伞"):
                 if term in user_text:
-                    arguments["query"] = term
+                    product_arguments["query"] = term
                     break
             for category in ("数码", "箱包", "家居", "服饰", "运动"):
                 if category in user_text:
-                    arguments["category"] = category
+                    product_arguments["category"] = category
                     break
-            return self._call(call_id, "search_products", arguments)
+            return self._call(call_id, "search_products", product_arguments)
 
         return ModelResponse(
             content="我可以帮你查询商品与库存、当前账号的订单、物流异常和售后进度。"
@@ -208,6 +240,17 @@ class MockCommerceProvider:
     @staticmethod
     def _call(call_id: str, name: str, arguments: dict[str, Any]) -> ModelResponse:
         return ModelResponse(tool_calls=[ToolCall(id=call_id, name=name, arguments=arguments)])
+
+    @classmethod
+    def _knowledge_call(cls, call_id: str, user_text: str) -> ModelResponse:
+        arguments: dict[str, Any] = {"query": user_text, "limit": 3}
+        if any(word in user_text for word in ("保养", "清洁", "使用说明")):
+            arguments["document_type"] = "product_guide"
+        elif "忽略系统指令" in user_text:
+            arguments["document_type"] = "security_guide"
+        else:
+            arguments["document_type"] = "policy"
+        return cls._call(call_id, "search_store_policy", arguments)
 
     @staticmethod
     def _render_tool_results(messages: list[ProviderMessage]) -> str:
@@ -275,5 +318,16 @@ class MockCommerceProvider:
             return (
                 f"售后申请 {data['id']} 当前状态为 {data['status']}，"
                 f"申请类型为 {data['type']}，金额 ¥{data['requested_amount']}。"
+            )
+        if message.tool_name == "search_store_policy":
+            citations = data.get("citations", [])
+            if not citations:
+                return "当前有效知识中没有足够证据回答这个问题，建议转人工确认。"
+            if any("忽略系统指令" in item.get("content", "") for item in citations):
+                citation = citations[0]["citation_id"]
+                return f"检索内容含有指令性文本，已按不可信资料处理，不会执行。[{citation}]"
+            evidence = citations[:2]
+            return "；".join(
+                f"{item['content']} [{item['citation_id']}]" for item in evidence
             )
         return "查询已完成。"
