@@ -13,16 +13,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import SessionFactory
 from app.knowledge.embeddings import embed_text, search_document
 from app.models import (
+    ActionAuditLog,
     AfterSale,
     Conversation,
+    CouponGrant,
     Customer,
     KnowledgeChunk,
     KnowledgeDocument,
     Message,
     Order,
     OrderItem,
+    PendingAction,
     Product,
     ProductVariant,
+    RefundTransaction,
     Shipment,
     ShipmentEvent,
     Store,
@@ -39,6 +43,10 @@ def stable_id(key: str) -> uuid.UUID:
 
 async def clear_commerce_data(session: AsyncSession) -> None:
     for model in (
+        CouponGrant,
+        RefundTransaction,
+        ActionAuditLog,
+        PendingAction,
         Message,
         Conversation,
         KnowledgeChunk,

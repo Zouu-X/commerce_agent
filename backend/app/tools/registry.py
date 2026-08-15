@@ -8,7 +8,14 @@ from pydantic import BaseModel, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.types import ToolSpec
+from app.approvals.errors import ApprovalError
 from app.commerce.errors import ResourceNotFoundError
+from app.tools.action_tools import (
+    ActionToolHandlers,
+    RequestCouponArgs,
+    RequestOrderCancellationArgs,
+    RequestRefundArgs,
+)
 from app.tools.context import ToolContext
 from app.tools.knowledge_tools import KnowledgeToolHandlers, SearchStorePolicyArgs
 from app.tools.read_tools import (
@@ -62,7 +69,7 @@ class ToolRegistry:
             return self._error("invalid_arguments", details={"fields": fields})
         try:
             data = await tool.handler(validated)
-        except ResourceNotFoundError as error:
+        except (ResourceNotFoundError, ApprovalError) as error:
             return self._error(str(error))
         except Exception:
             return self._error("tool_execution_failed")
@@ -122,6 +129,33 @@ def build_read_tool_registry(session: AsyncSession, context: ToolContext) -> Too
             "检索当前店铺有效的退换货、发货、物流、补偿政策或商品使用指南，并返回引用。",
             SearchStorePolicyArgs,
             knowledge_handlers.search_store_policy,
+        ),
+    ):
+        registry.register(tool)
+    return registry
+
+
+def build_tool_registry(session: AsyncSession, context: ToolContext) -> ToolRegistry:
+    registry = build_read_tool_registry(session, context)
+    action_handlers = ActionToolHandlers(session, context)
+    for tool in (
+        RegisteredTool(
+            "request_order_cancellation",
+            "请求取消当前顾客的订单。只创建待人工审批动作，不会直接取消订单。",
+            RequestOrderCancellationArgs,
+            action_handlers.request_order_cancellation,
+        ),
+        RegisteredTool(
+            "request_refund",
+            "请求为当前顾客的订单退款。只创建待人工审批动作，不会直接退款。",
+            RequestRefundArgs,
+            action_handlers.request_refund,
+        ),
+        RegisteredTool(
+            "request_coupon",
+            "请求向当前顾客发放补偿券。只创建待人工审批动作，不会直接发券。",
+            RequestCouponArgs,
+            action_handlers.request_coupon,
         ),
     ):
         registry.register(tool)

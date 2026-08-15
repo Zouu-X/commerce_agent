@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.commerce.seed import stable_id
 from app.tools.context import ToolContext
-from app.tools.registry import build_read_tool_registry
+from app.tools.registry import build_read_tool_registry, build_tool_registry
 
 pytestmark = pytest.mark.anyio
 
@@ -19,7 +19,7 @@ def tool_context(customer_index: int) -> ToolContext:
 
 
 async def test_tool_schemas_do_not_expose_trusted_identity(db_session: AsyncSession) -> None:
-    registry = build_read_tool_registry(db_session, tool_context(0))
+    registry = build_tool_registry(db_session, tool_context(0))
 
     for spec in registry.specs():
         properties = spec.parameters.get("properties", {})
@@ -58,7 +58,7 @@ async def test_unknown_tool_returns_stable_error(db_session: AsyncSession) -> No
     }
 
 
-async def test_all_seven_read_tool_adapters_return_structured_data(
+async def test_all_read_tool_adapters_return_structured_data(
     db_session: AsyncSession,
 ) -> None:
     registry = build_read_tool_registry(db_session, tool_context(2))
@@ -83,3 +83,62 @@ async def test_all_seven_read_tool_adapters_return_structured_data(
         assert result["ok"] is True, (tool_name, result)
         assert result["tool"] == tool_name
         assert result["data"]
+
+
+async def test_write_tool_only_creates_pending_action(db_session: AsyncSession) -> None:
+    registry = build_tool_registry(db_session, tool_context(0))
+
+    result = await registry.execute(
+        "request_order_cancellation",
+        {"order_number": "AUR-202607-0001", "reason": "顾客误拍"},
+    )
+    order = await registry.execute(
+        "get_order_details", {"order_number": "AUR-202607-0001"}
+    )
+
+    assert result["ok"] is True
+    assert result["data"]["status"] == "pending"
+    assert result["data"]["requires_approval"] is True
+    assert order["data"]["status"] == "paid"
+
+
+async def test_read_registry_does_not_expose_action_tools(db_session: AsyncSession) -> None:
+    registry = build_read_tool_registry(db_session, tool_context(0))
+
+    assert len(registry.specs()) == 7
+    result = await registry.execute(
+        "request_coupon",
+        {"amount": "10.00", "reason": "物流补偿"},
+    )
+    assert result == {"ok": False, "error": {"code": "unknown_tool"}}
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "arguments"),
+    [
+        (
+            "request_refund",
+            {
+                "order_number": "AUR-202607-0003",
+                "amount": "10.001",
+                "reason": "金额精度测试",
+            },
+        ),
+        (
+            "request_coupon",
+            {"amount": "0.001", "reason": "金额精度测试"},
+        ),
+    ],
+)
+async def test_action_tools_reject_sub_cent_amounts(
+    db_session: AsyncSession,
+    tool_name: str,
+    arguments: dict[str, str],
+) -> None:
+    result = await build_tool_registry(db_session, tool_context(2)).execute(
+        tool_name, arguments
+    )
+
+    assert result["ok"] is False
+    assert result["error"]["code"] == "invalid_arguments"
+    assert "amount" in result["error"]["details"]["fields"]

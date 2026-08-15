@@ -15,7 +15,7 @@ from app.agent.types import ModelResponse, ModelUsage, ProviderMessage, ToolCall
 from app.commerce.context import CommerceContext
 from app.models import Conversation, Message
 from app.tools.context import ToolContext
-from app.tools.registry import ToolRegistry, build_read_tool_registry
+from app.tools.registry import ToolRegistry, build_tool_registry
 
 
 @dataclass(frozen=True)
@@ -93,7 +93,7 @@ class AgentRuntime:
             conversation_id=conversation.id,
             trace_id=trace_id,
         )
-        registry = build_read_tool_registry(self._session, tool_context)
+        registry = build_tool_registry(self._session, tool_context)
         total_tool_calls = 0
         input_tokens = 0
         output_tokens = 0

@@ -364,8 +364,8 @@ Service     Service   Service     Service
 | 工具 | 功能 | 默认策略 |
 |---|---|---|
 | `request_refund` | 创建退款申请 | 必须审批 |
-| `issue_coupon` | 向顾客发放补偿券 | 必须审批 |
-| `cancel_order` | 取消符合条件的订单 | 必须审批 |
+| `request_coupon` | 向顾客发放补偿券 | 必须审批 |
+| `request_order_cancellation` | 取消符合条件的订单 | 必须审批 |
 | `transfer_to_human` | 转接人工客服 | 可自动执行 |
 
 ### 7.3 工具安全规则
@@ -746,10 +746,10 @@ commerce-support-agent/
 
 ### 里程碑 4：审批和写操作（3～4 天）
 
-- 实现 `pending_actions` 状态机；
-- 实现退款、发券和取消订单请求；
-- 实现人工审批 API 和页面；
-- 实现幂等执行、状态复查和审计日志。
+- [x] 实现 `pending_actions` 状态机；
+- [x] 实现退款、发券和取消订单请求；
+- [x] 实现人工审批 API 和页面；
+- [x] 实现幂等执行、状态复查和审计日志。
 
 **验收标准：** 未审批动作无法改变业务数据；重复批准不会重复退款或发券。
 
