@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from decimal import Decimal
 from typing import Any, Protocol
 from uuid import uuid4
 
@@ -150,6 +151,7 @@ class MockCommerceProvider:
         r"-[89ab][0-9a-f]{3}-[0-9a-f]{12}(?![0-9a-f])",
         re.IGNORECASE,
     )
+    _amount_pattern = re.compile(r"(?<!\d)(\d+(?:\.\d{1,2})?)\s*元")
     _explicit_knowledge_terms = ("政策", "规则", "时效")
     _knowledge_terms = (
         "政策",
@@ -201,6 +203,36 @@ class MockCommerceProvider:
         # even when an order number or a logistics keyword is also present.
         if any(word in user_text for word in self._explicit_knowledge_terms):
             return self._knowledge_call(call_id, user_text)
+        if order_number and any(
+            phrase in user_text for phrase in ("取消订单", "帮我取消", "不想要了", "不要了")
+        ):
+            return self._call(
+                call_id,
+                "request_order_cancellation",
+                {"order_number": order_number, "reason": user_text},
+            )
+        if order_number and any(
+            phrase in user_text for phrase in ("申请退款", "帮我退款", "退我", "我要退款")
+        ):
+            refund_arguments: dict[str, Any] = {
+                "order_number": order_number,
+                "reason": user_text,
+            }
+            amount = self._amount(user_text)
+            if amount is not None:
+                refund_arguments["amount"] = str(amount)
+            return self._call(call_id, "request_refund", refund_arguments)
+        if any(word in user_text for word in ("发优惠券", "发券", "补偿券", "补偿优惠券")):
+            amount = self._amount(user_text)
+            if amount is None:
+                return ModelResponse(content="请说明希望申请的补偿券金额，例如 10 元。")
+            coupon_arguments: dict[str, Any] = {
+                "amount": str(amount),
+                "reason": user_text,
+            }
+            if order_number:
+                coupon_arguments["order_number"] = order_number
+            return self._call(call_id, "request_coupon", coupon_arguments)
         if order_number and any(word in user_text for word in ("物流", "快递", "到哪", "发货")):
             return self._call(call_id, "track_shipment", {"order_number": order_number})
         if order_number:
@@ -240,6 +272,11 @@ class MockCommerceProvider:
     @staticmethod
     def _call(call_id: str, name: str, arguments: dict[str, Any]) -> ModelResponse:
         return ModelResponse(tool_calls=[ToolCall(id=call_id, name=name, arguments=arguments)])
+
+    @classmethod
+    def _amount(cls, user_text: str) -> Decimal | None:
+        match = cls._amount_pattern.search(user_text)
+        return Decimal(match.group(1)) if match else None
 
     @classmethod
     def _knowledge_call(cls, call_id: str, user_text: str) -> ModelResponse:
@@ -329,5 +366,14 @@ class MockCommerceProvider:
             evidence = citations[:2]
             return "；".join(
                 f"{item['content']} [{item['citation_id']}]" for item in evidence
+            )
+        if message.tool_name in {
+            "request_order_cancellation",
+            "request_refund",
+            "request_coupon",
+        }:
+            return (
+                f"已创建待人工审批的 {data['action_type']} 请求，"
+                f"审批编号 {data['action_id']}。审批前不会修改订单、退款或发券。"
             )
         return "查询已完成。"

@@ -1,3 +1,4 @@
+from app.models.approvals import ActionAuditLog, CouponGrant, PendingAction, RefundTransaction
 from app.models.commerce import (
     AfterSale,
     Conversation,
@@ -15,16 +16,20 @@ from app.models.commerce import (
 from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 
 __all__ = [
+    "ActionAuditLog",
     "AfterSale",
     "Conversation",
+    "CouponGrant",
     "Customer",
     "KnowledgeChunk",
     "KnowledgeDocument",
     "Message",
     "Order",
     "OrderItem",
+    "PendingAction",
     "Product",
     "ProductVariant",
+    "RefundTransaction",
     "Shipment",
     "ShipmentEvent",
     "Store",

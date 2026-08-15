@@ -266,3 +266,38 @@ async def test_order_number_policy_question_routes_to_knowledge_before_logistics
     messages = persisted.json()["messages"]
     assert messages[1]["tool_calls"][0]["name"] == "search_store_policy"
     assert messages[2]["tool_name"] == "search_store_policy"
+
+
+@pytest.mark.anyio
+async def test_agent_creates_pending_cancellation_without_changing_order(
+    db_session: AsyncSession,
+) -> None:
+    async def override_session() -> AsyncIterator[AsyncSession]:
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_session
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            conversation_id = await create_conversation(client, 0)
+            turn = await client.post(
+                f"/api/v1/conversations/{conversation_id}/messages",
+                headers=headers(0),
+                json={"content": "帮我取消订单 AUR-202607-0001，我不想要了"},
+            )
+            order = await client.get(
+                "/api/v1/orders/AUR-202607-0001", headers=headers(0)
+            )
+            persisted = await client.get(
+                f"/api/v1/conversations/{conversation_id}", headers=headers(0)
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert turn.status_code == 200
+    assert "待人工审批" in turn.json()["message"]["content"]
+    assert "审批前不会修改" in turn.json()["message"]["content"]
+    assert order.json()["status"] == "paid"
+    messages = persisted.json()["messages"]
+    assert messages[1]["tool_calls"][0]["name"] == "request_order_cancellation"
+    assert messages[2]["tool_name"] == "request_order_cancellation"

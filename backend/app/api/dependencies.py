@@ -5,6 +5,7 @@ from fastapi import Header
 
 from app.agent.errors import ModelProviderError
 from app.agent.provider import MockCommerceProvider, ModelProvider, OpenAICompatibleProvider
+from app.approvals.context import ApprovalContext
 from app.commerce.context import CommerceContext
 from app.core.config import get_settings
 
@@ -18,6 +19,18 @@ async def get_commerce_context(
         tenant_id=tenant_id,
         store_id=store_id,
         customer_id=customer_id,
+    )
+
+
+async def get_approval_context(
+    tenant_id: Annotated[UUID, Header(alias="X-Tenant-Id")],
+    store_id: Annotated[UUID, Header(alias="X-Store-Id")],
+    approver_id: Annotated[str, Header(alias="X-Approver-Id", min_length=1, max_length=160)],
+) -> ApprovalContext:
+    return ApprovalContext(
+        tenant_id=tenant_id,
+        store_id=store_id,
+        approver_id=approver_id,
     )
 
 
