@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:0.8.2-pg17-bookworm
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-commerce}
       POSTGRES_USER: ${POSTGRES_USER:-commerce}

@@ -12,6 +12,7 @@ dependencies = [
   "asyncpg>=0.30,<1",
   "fastapi>=0.116,<1",
   "httpx>=0.28,<1",
+  "pgvector>=0.3.6,<1",
   "pydantic-settings>=2.10,<3",
   "sqlalchemy[asyncio]>=2.0.41,<3",
   "uvicorn[standard]>=0.35,<1",

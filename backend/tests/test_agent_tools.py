@@ -58,7 +58,7 @@ async def test_unknown_tool_returns_stable_error(db_session: AsyncSession) -> No
     }
 
 
-async def test_all_six_read_tool_adapters_return_structured_data(
+async def test_all_seven_read_tool_adapters_return_structured_data(
     db_session: AsyncSession,
 ) -> None:
     registry = build_read_tool_registry(db_session, tool_context(2))
@@ -71,6 +71,10 @@ async def test_all_six_read_tool_adapters_return_structured_data(
         (
             "get_after_sale_status",
             {"after_sale_id": str(stable_id("after-sale:aurora:2"))},
+        ),
+        (
+            "search_store_policy",
+            {"query": "无理由退货多少天", "document_type": "policy"},
         ),
     )
 

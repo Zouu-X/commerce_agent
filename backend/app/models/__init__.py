@@ -12,11 +12,14 @@ from app.models.commerce import (
     Store,
     Tenant,
 )
+from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
 
 __all__ = [
     "AfterSale",
     "Conversation",
     "Customer",
+    "KnowledgeChunk",
+    "KnowledgeDocument",
     "Message",
     "Order",
     "OrderItem",
