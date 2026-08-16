@@ -12,5 +12,6 @@ frontend/dist/
 
 .coverage
 htmlcov/
+eval-results/*.json
 logs/*
 !logs/milestone-*.md

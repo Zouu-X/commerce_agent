@@ -2,7 +2,8 @@
 
 一个可评测、可观测的多租户电商客服 Agent 沙盒。项目当前已具备确定性电商业务沙盒、
 Provider-independent Agent Runtime、知识库混合检索、7 个安全只读工具，以及退款、发券、
-取消订单三类人工审批写操作，详细范围见 [`project_plan.md`](./project_plan.md)。
+取消订单三类人工审批写操作。Milestone 5 进一步加入 60 条离线评测、完整 Trace 时间线、
+token/成本/延迟统计和结构化报告，详细范围见 [`project_plan.md`](./project_plan.md)。
 
 ## 环境要求
 
@@ -40,6 +41,16 @@ make test
 ```
 
 后端检查默认在 Python 3.12 容器中执行，因此本机没有安装 Python 3.12 也可以运行。
+
+运行确定性完整评测：
+
+```bash
+make eval
+```
+
+该命令会迁移并重置 Demo 数据，然后运行 60 条用例。评测写操作只保留 Trace 证据，结束前会
+清理自己创建的待审批记录，不污染人工审批队列。报告同时写入数据库和
+`eval-results/evaluation-<run_id>.json`，`eval-results/latest.json` 指向最近一次结果。
 
 ## 电商沙盒
 
@@ -203,6 +214,71 @@ curl \
 身份字段不会出现在工具参数 Schema 中。`tenant_id`、`store_id`、`customer_id`、
 `conversation_id` 和 `trace_id` 均由服务端注入，模型无法覆盖。
 
+## 离线评测
+
+Milestone 5 的当前判分契约为 `milestone-5-v3`，包含 60 条用例，覆盖：
+
+- 商品搜索、订单详情、物流异常和售后状态；
+- 两个 tenant 的政策检索、引用与无证据回退；
+- 退款、发券、取消订单的待审批语义；
+- 跨 tenant、跨 customer、身份覆盖、审批绕过和检索内容 Prompt Injection。
+
+每条用例通过真实 `AgentRuntime -> ToolRegistry -> Service -> Database` 链路执行，而不是直接
+调用 Mock Provider 后比较字符串。Evaluator 分别计算工具选择、必要工具召回、参数有效性、
+任务完成、引用覆盖和安全检查；失败用例会保留实际工具、失败检查项和对应 `trace_id`。
+
+2026-08-15 在本地 Docker PostgreSQL + Mock Provider 上的可复现基线：
+
+| 指标 | 结果 |
+|---|---:|
+| 用例通过率 | 58 / 60 |
+| 工具选择准确率 | 100% |
+| 必要工具召回率 | 100% |
+| 工具参数有效率 | 100% |
+| 任务完成率 | 100% |
+| 知识回答引用覆盖率 | 100% |
+| 知识回答引用正确率 | 83.33% |
+| 跨范围数据泄露率 | 0% |
+| 未审批写操作执行率 | 0% |
+| P95 延迟 | 11 ms |
+
+严格引用集合判分发现两条回复虽然包含正确主引用，但还夹带了非期望切片，因此质量门禁如实
+未通过；失败证据可在评测页和对应 Trace 中直接查看。没有适用样本的子集指标会标记为
+`not_applicable`，不参与聚合门禁。
+
+这些数字是确定性 Mock 的回归基线，用于证明链路、指标和安全边界可重复验证，不代表真实大
+模型的泛化表现。切换 OpenAI-compatible Provider 后仍使用同一数据集和指标，并按
+`provider / model / prompt_version / dataset_version` 保存结果，便于 A/B 对比。Mock token 和
+成本均为 0；真实 Provider 会记录返回的 usage，并使用环境变量中的每百万 token 单价估算成本。
+
+评测 API：
+
+- `POST /api/v1/evaluations/runs`
+- `GET /api/v1/evaluations/runs`
+- `GET /api/v1/evaluations/runs/{run_id}`
+
+## Trace 与可观测性
+
+每次 Agent turn 都会创建一个 `agent_trace`，并用显式 `event_index` 记录：请求、每次模型调用、
+每次工具调用、最终回复或错误。Trace 汇总模型和 Prompt 版本、model/tool 调用次数、输入输出
+token、首个模型响应、总延迟和估算成本。事件中的常见 API key、邮箱、手机号、地址、收件人和
+物流单号字段会脱敏。
+
+按店铺查看最近 Trace 或单次完整时间线：
+
+```bash
+curl \
+  -H 'X-Tenant-Id: 8741aaf7-d17d-523d-9f6a-f534109d7848' \
+  -H 'X-Store-Id: 46267c0e-11d5-5634-9629-07f8f307c42d' \
+  http://localhost:8000/api/v1/traces
+```
+
+- `GET /api/v1/traces`
+- `GET /api/v1/traces/{trace_id}`
+
+Web 控制台提供“审批 / Trace / 评测”三个视图。Trace 视图展示稳定排序的事件时间线；评测视图
+展示历史运行、汇总指标和失败用例，并可从失败用例直接跳转到对应 Trace。
+
 ### 切换到 OpenAI-compatible Provider
 
 ```dotenv
@@ -210,6 +286,8 @@ MODEL_PROVIDER=openai_compatible
 MODEL_NAME=<provider-model-name>
 MODEL_BASE_URL=https://api.openai.com/v1
 MODEL_API_KEY=<provider-api-key>
+MODEL_INPUT_COST_PER_MILLION=<input-token-price>
+MODEL_OUTPUT_COST_PER_MILLION=<output-token-price>
 ```
 
 适配层使用 Chat Completions 风格的 `messages`、`tools` 和 `tool_calls` 契约；Runtime、

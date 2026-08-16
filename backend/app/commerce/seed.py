@@ -15,9 +15,12 @@ from app.knowledge.embeddings import embed_text, search_document
 from app.models import (
     ActionAuditLog,
     AfterSale,
+    AgentTrace,
     Conversation,
     CouponGrant,
     Customer,
+    EvaluationCaseResult,
+    EvaluationRun,
     KnowledgeChunk,
     KnowledgeDocument,
     Message,
@@ -31,6 +34,7 @@ from app.models import (
     ShipmentEvent,
     Store,
     Tenant,
+    TraceEvent,
 )
 
 SEED_NAMESPACE = uuid.UUID("432f38f6-e958-4fa0-a6d8-b76cfd31be71")
@@ -43,6 +47,10 @@ def stable_id(key: str) -> uuid.UUID:
 
 async def clear_commerce_data(session: AsyncSession) -> None:
     for model in (
+        EvaluationCaseResult,
+        EvaluationRun,
+        TraceEvent,
+        AgentTrace,
         CouponGrant,
         RefundTransaction,
         ActionAuditLog,

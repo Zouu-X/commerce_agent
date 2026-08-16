@@ -1,4 +1,4 @@
-.PHONY: up down logs test lint frontend-install seed reset-demo migrate
+.PHONY: up down logs test lint frontend-install seed reset-demo migrate eval
 
 DOCKER ?= docker
 
@@ -18,6 +18,10 @@ seed:
 	$(DOCKER) compose exec api python -m app.commerce.seed
 
 reset-demo: seed
+
+eval:
+	$(DOCKER) compose build api
+	$(DOCKER) compose run --rm api sh -c "alembic upgrade head && python -m app.commerce.seed && python -m app.evaluations.cli --output-dir /app/eval-results"
 
 frontend-install:
 	npm --prefix frontend install

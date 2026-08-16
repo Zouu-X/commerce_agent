@@ -14,13 +14,22 @@ from app.models.commerce import (
     Tenant,
 )
 from app.models.knowledge import KnowledgeChunk, KnowledgeDocument
+from app.models.observability import (
+    AgentTrace,
+    EvaluationCaseResult,
+    EvaluationRun,
+    TraceEvent,
+)
 
 __all__ = [
     "ActionAuditLog",
+    "AgentTrace",
     "AfterSale",
     "Conversation",
     "CouponGrant",
     "Customer",
+    "EvaluationCaseResult",
+    "EvaluationRun",
     "KnowledgeChunk",
     "KnowledgeDocument",
     "Message",
@@ -34,4 +43,5 @@ __all__ = [
     "ShipmentEvent",
     "Store",
     "Tenant",
+    "TraceEvent",
 ]

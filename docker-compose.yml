@@ -25,11 +25,15 @@ services:
       MODEL_NAME: ${MODEL_NAME:-mock-commerce-agent}
       MODEL_BASE_URL: ${MODEL_BASE_URL:-https://api.openai.com/v1}
       MODEL_API_KEY: ${MODEL_API_KEY:-}
+      MODEL_INPUT_COST_PER_MILLION: ${MODEL_INPUT_COST_PER_MILLION:-0}
+      MODEL_OUTPUT_COST_PER_MILLION: ${MODEL_OUTPUT_COST_PER_MILLION:-0}
     depends_on:
       db:
         condition: service_healthy
     ports:
       - "8000:8000"
+    volumes:
+      - ./eval-results:/app/eval-results
 
   web:
     build:
