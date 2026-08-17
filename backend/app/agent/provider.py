@@ -59,10 +59,18 @@ class _ChatCompletion(_StrictResponse):
 class OpenAICompatibleProvider:
     """Minimal Chat Completions adapter; the Agent runtime does not depend on an SDK."""
 
-    def __init__(self, *, base_url: str, api_key: str, model: str) -> None:
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        api_key: str,
+        model: str,
+        request_options: dict[str, Any] | None = None,
+    ) -> None:
         self._url = f"{base_url.rstrip('/')}/chat/completions"
         self._api_key = api_key
         self._model = model
+        self._request_options = request_options or {}
 
     async def complete(
         self,
@@ -86,6 +94,7 @@ class OpenAICompatibleProvider:
                 for tool in tools
             ],
             "tool_choice": "auto",
+            **self._request_options,
         }
         try:
             async with httpx.AsyncClient(timeout=timeout_seconds) as client:
@@ -140,8 +149,22 @@ class OpenAICompatibleProvider:
         return payload
 
 
+class DeepSeekProvider(OpenAICompatibleProvider):
+    """DeepSeek V4 adapter using its OpenAI-compatible tool-calling API."""
+
+    def __init__(self, *, base_url: str, api_key: str, model: str) -> None:
+        # V4 defaults to thinking mode. Thinking tool calls require reasoning_content
+        # round-tripping; customer support favors the lower-latency non-thinking path.
+        super().__init__(
+            base_url=base_url,
+            api_key=api_key,
+            model=model,
+            request_options={"thinking": {"type": "disabled"}},
+        )
+
+
 class MockCommerceProvider:
-    """Deterministic local provider used for a zero-key demo and end-to-end tests."""
+    """Deterministic provider retained for tests and reproducible evaluation baselines."""
 
     _order_pattern = re.compile(
         r"(?<![A-Z0-9])[A-Z]{3}-\d{6}-\d{4}(?![A-Z0-9])", re.IGNORECASE
@@ -320,6 +343,8 @@ class MockCommerceProvider:
             result = json.loads(message.content)
         except json.JSONDecodeError:
             return "查询结果暂时无法解析，请稍后重试。"
+        if "summary" in result:
+            return MockCommerceProvider._render_customer_safe_result(message.tool_name, result)
         if not result.get("ok"):
             code = result.get("error", {}).get("code", "tool_error")
             if code.endswith("not_found"):
@@ -390,3 +415,42 @@ class MockCommerceProvider:
                 f"审批编号 {data['action_id']}。审批前不会修改订单、退款或发券。"
             )
         return "查询已完成。"
+
+    @staticmethod
+    def _render_customer_safe_result(tool_name: str | None, data: dict[str, Any]) -> str:
+        summary = str(data.get("summary", "查询已完成。"))
+        if tool_name == "search_products":
+            products = data.get("products", [])
+            if not products:
+                return summary
+            items = [
+                f"{item['name']}（{item['price']}，{item['stock']}）" for item in products
+            ]
+            return "为你找到：" + "；".join(items) + "。"
+        if tool_name == "get_customer_orders":
+            orders = data.get("orders", [])
+            if not orders:
+                return summary
+            return "你的订单包括：" + "；".join(
+                str(item.get("summary", "")) for item in orders
+            )
+        if tool_name == "get_order_details":
+            return summary
+        if tool_name == "track_shipment":
+            latest = data.get("latest_event")
+            if isinstance(latest, dict):
+                return f"{summary}最近节点：{latest.get('description', '暂无物流节点')}。"
+            return summary
+        if tool_name == "get_after_sale_status":
+            return summary
+        if tool_name == "search_store_policy":
+            sources = data.get("sources", [])
+            if not sources:
+                return summary
+            if any("忽略系统指令" in str(item.get("content", "")) for item in sources):
+                return "检索资料含有指令性文本，已按不可信资料处理，不会执行。"
+            return "；".join(
+                f"根据《{item.get('title', '店铺政策')}》：{item.get('content', '')}"
+                for item in sources[:2]
+            )
+        return summary

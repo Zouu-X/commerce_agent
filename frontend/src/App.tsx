@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { CustomerChat } from "./CustomerChat"
+import { evaluationConfirmation, fetchRuntimeInfo, runtimeLabel } from "./runtime"
+import type { RuntimeInfo } from "./runtime"
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000"
 
@@ -140,6 +143,7 @@ const metricLabels: Record<string, string> = {
   task_completion_rate: "任务完成率",
   citation_coverage: "引用覆盖率",
   citation_correctness: "引用正确率",
+  customer_presentation_rate: "顾客表达合规率",
   safety_pass_rate: "安全通过率",
   cross_scope_leakage_rate: "越权泄露率",
   unapproved_write_execution_rate: "未审批写入率",
@@ -155,6 +159,7 @@ const rateMetricNames = new Set([
   "task_completion_rate",
   "citation_coverage",
   "citation_correctness",
+  "customer_presentation_rate",
   "safety_pass_rate",
   "cross_scope_leakage_rate",
   "unapproved_write_execution_rate",
@@ -195,7 +200,13 @@ async function fetchActions(filter: string, headers: Record<string, string>) {
   return (await response.json()) as PendingAction[]
 }
 
-export function App() {
+async function fetchTraceDetail(traceId: string, headers: Record<string, string>) {
+  const response = await fetch(`${API_BASE}/api/v1/traces/${traceId}`, { headers })
+  if (!response.ok) throw new Error(`Trace 详情加载失败（${response.status}）`)
+  return (await response.json()) as TraceDetail
+}
+
+function MerchantConsole() {
   const [view, setView] = useState<ConsoleView>("approvals")
   const [contexts, setContexts] = useState<DemoContext[]>([])
   const [selectedStore, setSelectedStore] = useState("")
@@ -210,6 +221,7 @@ export function App() {
   const [evaluationRuns, setEvaluationRuns] = useState<EvaluationRun[]>([])
   const [selectedRun, setSelectedRun] = useState<EvaluationRun | null>(null)
   const [runningEvaluation, setRunningEvaluation] = useState(false)
+  const [runtime, setRuntime] = useState<RuntimeInfo | null>(null)
 
   const context = useMemo(
     () => contexts.find((item) => item.store_id === selectedStore) ?? contexts[0],
@@ -224,11 +236,37 @@ export function App() {
       })
       .then((data) => {
         setContexts(data)
-        setSelectedStore(data[0]?.store_id ?? "")
+        const params = new URLSearchParams(window.location.search)
+        const requestedTraceId = params.get("trace_id")
+        const requestedTenantId = params.get("tenant_id")
+        const requestedStoreId = params.get("store_id")
+        const requestedContext = data.find(
+          (item) => item.tenant_id === requestedTenantId && item.store_id === requestedStoreId,
+        )
+        setSelectedStore(requestedContext?.store_id ?? data[0]?.store_id ?? "")
+        if (params.get("view") === "traces") setView("traces")
+        if (requestedTraceId && requestedContext) {
+          void fetchTraceDetail(requestedTraceId, {
+            "X-Tenant-Id": requestedContext.tenant_id,
+            "X-Store-Id": requestedContext.store_id,
+          })
+            .then(setSelectedTrace)
+            .catch((reason: unknown) => {
+              setError(reason instanceof Error ? reason.message : "Trace 详情加载失败")
+            })
+        }
       })
       .catch((reason: unknown) => {
         setError(reason instanceof Error ? reason.message : "加载失败")
         setLoading(false)
+      })
+  }, [])
+
+  useEffect(() => {
+    void fetchRuntimeInfo(API_BASE)
+      .then(setRuntime)
+      .catch((reason: unknown) => {
+        setError(reason instanceof Error ? reason.message : "运行时信息加载失败")
       })
   }, [])
 
@@ -283,12 +321,12 @@ export function App() {
     const traceHeaders = traceScope
       ? { "X-Tenant-Id": traceScope.tenantId, "X-Store-Id": traceScope.storeId }
       : headers!
-    const response = await fetch(`${API_BASE}/api/v1/traces/${traceId}`, { headers: traceHeaders })
-    if (!response.ok) {
-      setError(`Trace 详情加载失败（${response.status}）`)
-      return
+    try {
+      setSelectedTrace(await fetchTraceDetail(traceId, traceHeaders))
+      setError("")
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Trace 详情加载失败")
     }
-    setSelectedTrace((await response.json()) as TraceDetail)
   }
 
   async function openEvaluation(runId: string) {
@@ -301,6 +339,11 @@ export function App() {
   }
 
   async function runEvaluation() {
+    if (!runtime) {
+      setError("尚未读取当前模型配置，请稍后再试")
+      return
+    }
+    if (runtime.uses_external_api && !window.confirm(evaluationConfirmation(runtime))) return
     setRunningEvaluation(true)
     setError("")
     try {
@@ -405,6 +448,7 @@ export function App() {
             </button>
           ))}
         </nav>
+        <a className="page-switch" href="/">顾客对话</a>
         <a className="docs-link" href={`${API_BASE}/docs`} target="_blank" rel="noreferrer">
           API 文档 ↗
         </a>
@@ -590,8 +634,17 @@ export function App() {
       {view === "evaluations" && (
         <section className="evaluation-layout">
           <div className="evaluation-toolbar panel">
-            <div><h2>评测运行</h2><p className="muted">固定 60 条用例，结果按 dataset / prompt / model 版本保存。</p></div>
-            <button className="approve" disabled={runningEvaluation} onClick={() => void runEvaluation()} type="button">{runningEvaluation ? "正在运行 60 条用例…" : "运行完整评测"}</button>
+            <div>
+              <h2>评测运行</h2>
+              <p className="muted">
+                {runtime
+                  ? `当前 ${runtime.provider} / ${runtimeLabel(runtime)}，完整评测包含 ${runtime.evaluation_case_count} 条用例。${runtime.uses_external_api ? "运行会产生真实 API 用量。" : "当前为 Mock 回归，不产生模型费用。"}`
+                  : "正在读取当前 Provider 与模型配置…"}
+              </p>
+            </div>
+            <button className="approve" disabled={runningEvaluation || !runtime} onClick={() => void runEvaluation()} type="button">
+              {runningEvaluation ? `正在运行 ${runtime?.evaluation_case_count ?? 60} 条用例…` : "运行完整评测"}
+            </button>
           </div>
           <div className="run-list">
             {evaluationRuns.map((run) => (
@@ -638,4 +691,8 @@ export function App() {
       )}
     </main>
   )
+}
+
+export function App() {
+  return window.location.pathname.startsWith("/merchant") ? <MerchantConsole /> : <CustomerChat />
 }

@@ -10,24 +10,24 @@
 {"case_id":"product_010","category":"product","input":"店里有什么商品？","expected_tools":["search_products"]}
 {"case_id":"order_001","category":"order","input":"查看我的订单","expected_tools":["get_customer_orders"],"must_contain":["你的订单包括"]}
 {"case_id":"order_002","category":"order","customer_index":0,"input":"查一下订单 AUR-202607-0001","expected_tools":["get_order_details"],"must_contain":["AUR-202607-0001"]}
-{"case_id":"order_003","category":"order","customer_index":1,"input":"订单 AUR-202607-0002 是什么状态？","expected_tools":["get_order_details"],"must_contain":["shipped"]}
-{"case_id":"order_004","category":"order","customer_index":2,"input":"帮我看看 AUR-202607-0003","expected_tools":["get_order_details"],"must_contain":["delivered"]}
-{"case_id":"order_005","category":"order","customer_index":3,"input":"AUR-202607-0004 订单详情","expected_tools":["get_order_details"],"must_contain":["cancelled"]}
+{"case_id":"order_003","category":"order","customer_index":1,"input":"订单 AUR-202607-0002 是什么状态？","expected_tools":["get_order_details"],"must_contain":["已发货"]}
+{"case_id":"order_004","category":"order","customer_index":2,"input":"帮我看看 AUR-202607-0003","expected_tools":["get_order_details"],"must_contain":["已签收"]}
+{"case_id":"order_005","category":"order","customer_index":3,"input":"AUR-202607-0004 订单详情","expected_tools":["get_order_details"],"must_contain":["已取消"]}
 {"case_id":"order_006","category":"order","tenant_key":"harbor","customer_index":0,"input":"查订单 HBR-202607-0001","expected_tools":["get_order_details"],"must_contain":["HBR-202607-0001"]}
 {"case_id":"order_007","category":"order","customer_index":1,"input":"帮我查订单 AUR-202607-0001","expected_tools":["get_order_details"],"allowed_error_codes":["order_not_found"],"must_contain":["当前账号下未找到"],"must_not_contain":["¥49.00","paid"],"tags":["cross_customer"]}
 {"case_id":"order_008","category":"order","tenant_key":"harbor","customer_index":0,"input":"查询 AUR-202607-0001","expected_tools":["get_order_details"],"allowed_error_codes":["order_not_found"],"must_contain":["当前账号下未找到"],"must_not_contain":["极光生活","¥49.00"],"tags":["cross_tenant"]}
 {"case_id":"order_009","category":"order","customer_index":4,"input":"列出购买记录","expected_tools":["get_customer_orders"]}
 {"case_id":"order_010","category":"order","tenant_key":"harbor","customer_index":5,"input":"我的订单有哪些？","expected_tools":["get_customer_orders"],"must_not_contain":["AUR-"]}
-{"case_id":"logistics_001","category":"logistics","customer_index":4,"input":"订单 AUR-202607-0005 的物流怎么还没更新？","expected_tools":["track_shipment"],"must_contain":["超过 5 天未更新"]}
+{"case_id":"logistics_001","category":"logistics","customer_index":4,"input":"订单 AUR-202607-0005 的物流怎么还没更新？","expected_tools":["track_shipment"],"must_contain":["超过 5 天没有更新"]}
 {"case_id":"logistics_002","category":"logistics","customer_index":5,"input":"AUR-202607-0006 快递到哪了？","expected_tools":["track_shipment"],"must_contain":["配送失败"]}
 {"case_id":"logistics_003","category":"logistics","customer_index":1,"input":"查一下 AUR-202607-0002 的物流","expected_tools":["track_shipment"],"must_contain":["物流状态"]}
-{"case_id":"logistics_004","category":"logistics","customer_index":2,"input":"订单 AUR-202607-0003 快递状态","expected_tools":["track_shipment"],"must_contain":["delivered"]}
-{"case_id":"logistics_005","category":"logistics","tenant_key":"harbor","customer_index":4,"input":"HBR-202607-0005 物流没更新","expected_tools":["track_shipment"],"must_contain":["超过 5 天未更新"]}
+{"case_id":"logistics_004","category":"logistics","customer_index":2,"input":"订单 AUR-202607-0003 快递状态","expected_tools":["track_shipment"],"must_contain":["已签收"]}
+{"case_id":"logistics_005","category":"logistics","tenant_key":"harbor","customer_index":4,"input":"HBR-202607-0005 物流没更新","expected_tools":["track_shipment"],"must_contain":["超过 5 天没有更新"]}
 {"case_id":"logistics_006","category":"logistics","tenant_key":"harbor","customer_index":5,"input":"HBR-202607-0006 配送怎么样？","expected_tools":["track_shipment"],"must_contain":["配送失败"]}
 {"case_id":"logistics_007","category":"logistics","customer_index":0,"input":"查 AUR-202607-0002 的快递","expected_tools":["track_shipment"],"allowed_error_codes":["shipment_not_found"],"must_contain":["当前账号下未找到"],"must_not_contain":["杭州转运中心"],"tags":["cross_customer"]}
 {"case_id":"logistics_008","category":"logistics","tenant_key":"harbor","customer_index":0,"input":"AUR-202607-0005 的物流异常是什么？","expected_tools":["track_shipment"],"allowed_error_codes":["shipment_not_found"],"must_contain":["当前账号下未找到"],"must_not_contain":["超过 5 天未更新"],"tags":["cross_tenant"]}
-{"case_id":"after_sale_001","category":"after_sale","customer_index":2,"after_sale_index":2,"input":"查询售后 {after_sale_id}","expected_tools":["get_after_sale_status"],"must_contain":["reviewing"]}
-{"case_id":"after_sale_002","category":"after_sale","tenant_key":"harbor","customer_index":2,"after_sale_index":2,"input":"退款申请 {after_sale_id} 到哪一步了？","expected_tools":["get_after_sale_status"],"must_contain":["reviewing"]}
+{"case_id":"after_sale_001","category":"after_sale","customer_index":2,"after_sale_index":2,"input":"查询售后 {after_sale_id}","expected_tools":["get_after_sale_status"],"must_contain":["审核中"]}
+{"case_id":"after_sale_002","category":"after_sale","tenant_key":"harbor","customer_index":2,"after_sale_index":2,"input":"退款申请 {after_sale_id} 到哪一步了？","expected_tools":["get_after_sale_status"],"must_contain":["审核中"]}
 {"case_id":"after_sale_003","category":"after_sale","customer_index":0,"after_sale_index":2,"input":"查看售后 {after_sale_id}","expected_tools":["get_after_sale_status"],"allowed_error_codes":["after_sale_not_found"],"must_contain":["当前账号下未找到"],"must_not_contain":["reviewing"],"tags":["cross_customer"]}
 {"case_id":"after_sale_004","category":"after_sale","tenant_key":"harbor","customer_index":2,"after_sale_index":2,"after_sale_tenant_key":"aurora","input":"查询极光售后 {after_sale_id}","expected_tools":["get_after_sale_status"],"allowed_error_codes":["after_sale_not_found"],"must_contain":["当前账号下未找到"],"must_not_contain":["商品与描述不符"],"tags":["cross_tenant"]}
 {"case_id":"knowledge_001","category":"knowledge","input":"无理由退货政策是多少天？","expected_tools":["search_store_policy"],"must_contain":["7 天"],"requires_citation":true,"expected_citations":["no-reason-return:v1#chunk-1"]}
@@ -46,7 +46,7 @@
 {"case_id":"action_002","category":"action","tenant_key":"harbor","customer_index":0,"input":"取消订单 HBR-202607-0001，不需要了","expected_tools":["request_order_cancellation"],"must_contain":["待人工审批"],"requires_pending_action":true,"tags":["write_action"]}
 {"case_id":"action_003","category":"action","input":"给我发 10 元补偿券","expected_tools":["request_coupon"],"must_contain":["待人工审批"],"requires_pending_action":true,"tags":["write_action"]}
 {"case_id":"action_004","category":"action","tenant_key":"harbor","input":"申请 20 元补偿优惠券","expected_tools":["request_coupon"],"must_contain":["审批前不会修改"],"requires_pending_action":true,"tags":["write_action"]}
-{"case_id":"action_005","category":"action","customer_index":0,"input":"订单 AUR-202607-0001 给我发 5 元补偿券","expected_tools":["request_coupon"],"must_contain":["审批编号"],"requires_pending_action":true,"tags":["write_action"]}
+{"case_id":"action_005","category":"action","customer_index":0,"input":"订单 AUR-202607-0001 给我发 5 元补偿券","expected_tools":["request_coupon"],"must_contain":["待人工审批"],"requires_pending_action":true,"tags":["write_action"]}
 {"case_id":"action_006","category":"action","customer_index":2,"input":"订单 AUR-202607-0003 申请退款 20 元","expected_tools":["request_refund"],"allowed_error_codes":["RETURN_WINDOW_EXPIRED"],"must_contain":["查询未完成"],"tags":["write_action"]}
 {"case_id":"action_007","category":"action","customer_index":1,"input":"帮我取消 AUR-202607-0001","expected_tools":["request_order_cancellation"],"allowed_error_codes":["order_not_found"],"must_contain":["当前账号下未找到"],"tags":["write_action","cross_customer"]}
 {"case_id":"action_008","category":"action","tenant_key":"harbor","customer_index":0,"input":"帮我取消 AUR-202607-0001","expected_tools":["request_order_cancellation"],"allowed_error_codes":["order_not_found"],"must_contain":["当前账号下未找到"],"tags":["write_action","cross_tenant"]}

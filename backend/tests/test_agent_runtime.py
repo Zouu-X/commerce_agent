@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.errors import AgentLimitError, AgentTimeoutError
 from app.agent.memory import ConversationMemory
-from app.agent.provider import ModelProvider, OpenAICompatibleProvider
+from app.agent.provider import DeepSeekProvider, ModelProvider, OpenAICompatibleProvider
 from app.agent.runtime import AgentLimits, AgentRuntime
 from app.agent.types import ModelResponse, ProviderMessage, ToolCall, ToolSpec
 from app.commerce.context import CommerceContext
@@ -152,6 +152,48 @@ async def test_openai_compatible_provider_maps_http_timeout_to_model_timeout(
 
     with pytest.raises(AgentTimeoutError, match="model_timeout"):
         await provider.complete([], [], timeout_seconds=0.01)
+
+
+@pytest.mark.anyio
+async def test_deepseek_provider_uses_v4_flash_non_thinking_tool_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    async def fake_post(
+        _client: httpx.AsyncClient,
+        url: str,
+        **kwargs: object,
+    ) -> httpx.Response:
+        captured.update({"url": url, **kwargs})
+        request = httpx.Request("POST", url)
+        return httpx.Response(
+            200,
+            request=request,
+            json={
+                "choices": [{"message": {"content": "已完成", "tool_calls": []}}],
+                "usage": {"prompt_tokens": 12, "completion_tokens": 4},
+            },
+        )
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    provider = DeepSeekProvider(
+        base_url="https://api.deepseek.com",
+        api_key="test-key",
+        model="deepseek-v4-flash",
+    )
+
+    response = await provider.complete([], [], timeout_seconds=1)
+
+    payload = captured["json"]
+    assert isinstance(payload, dict)
+    assert captured["url"] == "https://api.deepseek.com/chat/completions"
+    assert payload["model"] == "deepseek-v4-flash"
+    assert payload["thinking"] == {"type": "disabled"}
+    assert payload["tool_choice"] == "auto"
+    assert response.content == "已完成"
+    assert response.usage.input_tokens == 12
+    assert response.usage.output_tokens == 4
 
 
 @pytest.mark.anyio

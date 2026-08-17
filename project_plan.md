@@ -765,6 +765,8 @@ commerce-support-agent/
 
 ### 里程碑 6：求职包装（2～3 天）
 
+- [x] 补齐顾客聊天页，并与商户审批/Trace/评测后台拆成两个独立路由；
+- [x] 将 Demo 运行时 Provider 切换为 DeepSeek V4 Flash，Mock 仅保留给测试和回归基线；
 - 完善 README、架构图和威胁模型；
 - 准备 3～5 分钟演示脚本和视频；
 - 准备设计取舍、已知限制和后续路线；

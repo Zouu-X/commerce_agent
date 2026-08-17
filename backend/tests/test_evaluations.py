@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.errors import ModelProviderError
 from app.agent.provider import MockCommerceProvider
-from app.agent.types import ModelResponse, ProviderMessage
+from app.agent.types import ModelResponse, ProviderMessage, ToolSpec
 from app.api.evaluations import case_response
 from app.evaluations.dataset import EvaluationCase, load_dataset
 from app.evaluations.runner import EvaluationService, EvaluationSettings, evaluate_case
@@ -15,7 +15,7 @@ class FailingProvider:
     async def complete(
         self,
         messages: list[ProviderMessage],
-        tools: list[dict],
+        tools: list[ToolSpec],
         *,
         timeout_seconds: float,
     ) -> ModelResponse:
@@ -58,7 +58,9 @@ async def test_full_mock_evaluation_produces_structured_metrics(
 
     assert run.status == "succeeded"
     assert run.total_cases == 60
-    assert run.passed_cases == 58
+    assert run.passed_cases == 58, [
+        result.case_id for result in run.cases if not result.passed
+    ]
     assert len(run.cases) == 60
     assert all(result.trace_id is not None for result in run.cases)
     assert all(result.trace is not None for result in run.cases)
