@@ -1,4 +1,9 @@
+import os
 from collections.abc import AsyncIterator
+
+# Functional tests must never inherit a developer shell's real model configuration.
+os.environ["MODEL_PROVIDER"] = "mock"
+os.environ["MODEL_NAME"] = "mock-commerce-agent"
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine

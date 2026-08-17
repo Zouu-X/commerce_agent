@@ -1,12 +1,15 @@
 from collections.abc import AsyncIterator
+from uuid import UUID
 
 import httpx
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.commerce.seed import stable_id
 from app.db.session import get_db_session
 from app.main import app
+from app.models import Message
 
 
 def headers(customer_index: int) -> dict[str, str]:
@@ -51,15 +54,25 @@ async def test_product_consultation_persists_complete_tool_call_chain(
     assert turn.json()["tool_calls"] == 1
     assert "降噪蓝牙耳机" in turn.json()["message"]["content"]
     messages = persisted.json()["messages"]
-    assert [message["role"] for message in messages] == [
+    assert [message["role"] for message in messages] == ["user", "assistant"]
+    assert all(message["tool_calls"] == [] for message in messages)
+    internal_messages = list(
+        await db_session.scalars(
+            select(Message)
+                .where(Message.conversation_id == UUID(conversation_id))
+            .order_by(Message.sequence)
+        )
+    )
+    assert [message.role for message in internal_messages] == [
         "user",
         "assistant",
         "tool",
         "assistant",
     ]
-    assert messages[1]["tool_calls"][0]["name"] == "search_products"
-    assert messages[2]["tool_name"] == "search_products"
-    assert messages[2]["tool_call_id"] == messages[1]["tool_calls"][0]["id"]
+    stored_tool_calls = internal_messages[1].tool_calls_json
+    assert stored_tool_calls is not None
+    assert stored_tool_calls[0]["name"] == "search_products"
+    assert internal_messages[2].tool_name == "search_products"
 
 
 @pytest.mark.anyio
@@ -89,7 +102,7 @@ async def test_agent_completes_order_and_logistics_flows(db_session: AsyncSessio
     assert order_turn.status_code == 200
     assert "AUR-202607-0001" in order_turn.json()["message"]["content"]
     assert logistics_turn.status_code == 200
-    assert "超过 5 天未更新" in logistics_turn.json()["message"]["content"]
+    assert "超过 5 天没有更新" in logistics_turn.json()["message"]["content"]
 
 
 @pytest.mark.anyio
@@ -148,11 +161,15 @@ async def test_policy_answer_uses_current_store_evidence_and_citations(
     assert turn.status_code == 200
     content = turn.json()["message"]["content"]
     assert "支持签收后 7 天内" in content
-    assert "[no-reason-return:v1#chunk-1]" in content
+    assert "citation" not in content
+    assert "#chunk" not in content
+    assert turn.json()["message"]["sources"] == [
+        {"title": "七天/十五天无理由退货政策", "version": "v1"}
+    ]
     assert "30 天无理由退货" not in content
     messages = persisted.json()["messages"]
-    assert messages[1]["tool_calls"][0]["name"] == "search_store_policy"
-    assert messages[2]["tool_name"] == "search_store_policy"
+    assert [message["role"] for message in messages] == ["user", "assistant"]
+    assert messages[1]["sources"] == turn.json()["message"]["sources"]
 
 
 @pytest.mark.anyio
@@ -178,7 +195,10 @@ async def test_retrieved_prompt_injection_is_cited_but_never_executed(
     assert turn.status_code == 200
     content = turn.json()["message"]["content"]
     assert "不会执行" in content
-    assert "[untrusted-content-example:v1#chunk-1]" in content
+    assert "#chunk" not in content
+    assert turn.json()["message"]["sources"] == [
+        {"title": "知识内容安全说明", "version": "v1"}
+    ]
     assert "AUR-202607-0001" not in content
 
 
@@ -231,7 +251,10 @@ async def test_semantic_price_protection_query_routes_to_knowledge(
     assert turn.status_code == 200
     content = turn.json()["message"]["content"]
     assert "可申请保价" in content
-    assert "[price-protection:v1#chunk-1]" in content
+    assert "#chunk" not in content
+    assert turn.json()["message"]["sources"] == [
+        {"title": "商品保价政策", "version": "v1"}
+    ]
     assert "为你找到" not in content
 
 
@@ -261,11 +284,13 @@ async def test_order_number_policy_question_routes_to_knowledge_before_logistics
     assert turn.status_code == 200
     content = turn.json()["message"]["content"]
     assert "通常在 48 小时内发货" in content
-    assert "[shipping-time:v1#chunk-1]" in content
+    assert "#chunk" not in content
+    assert turn.json()["message"]["sources"] == [
+        {"title": "订单发货时效", "version": "v1"}
+    ]
     assert "订单取消规则" not in content
     messages = persisted.json()["messages"]
-    assert messages[1]["tool_calls"][0]["name"] == "search_store_policy"
-    assert messages[2]["tool_name"] == "search_store_policy"
+    assert [message["role"] for message in messages] == ["user", "assistant"]
 
 
 @pytest.mark.anyio
@@ -299,5 +324,5 @@ async def test_agent_creates_pending_cancellation_without_changing_order(
     assert "审批前不会修改" in turn.json()["message"]["content"]
     assert order.json()["status"] == "paid"
     messages = persisted.json()["messages"]
-    assert messages[1]["tool_calls"][0]["name"] == "request_order_cancellation"
-    assert messages[2]["tool_name"] == "request_order_cancellation"
+    assert [message["role"] for message in messages] == ["user", "assistant"]
+    assert messages[1]["tool_calls"] == []

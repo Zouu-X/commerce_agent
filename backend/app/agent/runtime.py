@@ -12,6 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.errors import AgentLimitError, AgentTimeoutError, ModelProviderError
 from app.agent.memory import ConversationMemory, to_provider_message
+from app.agent.presentation import (
+    CustomerSource,
+    present_tool_result,
+    sanitize_customer_response,
+)
 from app.agent.prompts import PROMPT_VERSION, SYSTEM_PROMPT
 from app.agent.provider import ModelProvider
 from app.agent.types import ModelResponse, ModelUsage, ProviderMessage, ToolCall
@@ -40,6 +45,7 @@ class AgentTurnResult:
     model_loops: int
     tool_calls: int
     usage: ModelUsage
+    sources: list[CustomerSource]
 
 
 class AgentRuntime:
@@ -152,6 +158,7 @@ class AgentRuntime:
         total_tool_calls = 0
         input_tokens = 0
         output_tokens = 0
+        customer_sources: list[CustomerSource] = []
 
         for model_loop in range(1, self._limits.max_model_loops + 1):
             model_started = perf_counter()
@@ -172,14 +179,15 @@ class AgentRuntime:
             if not response.tool_calls:
                 if not response.content.strip():
                     raise ModelProviderError("model_returned_empty_response")
+                customer_content = sanitize_customer_response(response.content)
                 assistant_message = self._memory.append(
                     conversation,
                     sequence=sequence,
                     role="assistant",
-                    content=response.content,
+                    content=customer_content,
                 )
                 await self._session.flush()
-                recorder.complete(response.content, total_latency_ms=_elapsed_ms(started))
+                recorder.complete(customer_content, total_latency_ms=_elapsed_ms(started))
                 await self._session.flush()
                 return AgentTurnResult(
                     trace_id=recorder.trace.id,
@@ -187,6 +195,7 @@ class AgentRuntime:
                     model_loops=model_loop,
                     tool_calls=total_tool_calls,
                     usage=ModelUsage(input_tokens=input_tokens, output_tokens=output_tokens),
+                    sources=_deduplicate_sources(customer_sources),
                 )
 
             total_tool_calls += len(response.tool_calls)
@@ -212,9 +221,9 @@ class AgentRuntime:
             results: list[str] = []
             for call in response.tool_calls:
                 tool_started = perf_counter()
-                content = await self._execute_tool(registry, call)
+                raw_content = await self._execute_tool(registry, call)
                 try:
-                    parsed_result = json.loads(content)
+                    parsed_result = json.loads(raw_content)
                 except json.JSONDecodeError:
                     parsed_result = {"ok": False, "error": {"code": "invalid_tool_result"}}
                 recorder.tool_completed(
@@ -224,7 +233,16 @@ class AgentRuntime:
                     result=parsed_result,
                     latency_ms=_elapsed_ms(tool_started),
                 )
-                results.append(content)
+                presented = present_tool_result(call.name, parsed_result)
+                customer_sources.extend(presented.sources)
+                results.append(
+                    json.dumps(
+                        presented.data,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                        default=str,
+                    )
+                )
             for call, content in zip(response.tool_calls, results, strict=True):
                 self._memory.append(
                     conversation,
@@ -280,3 +298,10 @@ class AgentRuntime:
 
 def _elapsed_ms(started: float) -> int:
     return max(0, round((perf_counter() - started) * 1000))
+
+
+def _deduplicate_sources(sources: list[CustomerSource]) -> list[CustomerSource]:
+    unique: dict[str, CustomerSource] = {}
+    for source in sources:
+        unique.setdefault(source.citation_id, source)
+    return list(unique.values())

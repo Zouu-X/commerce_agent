@@ -82,6 +82,7 @@ class DemoCustomerRead(StrictSchema):
     id: UUID
     display_name: str
     membership_level: str
+    sample_prompts: list[str] = Field(default_factory=list)
 
 
 class DemoContextRead(StrictSchema):
@@ -91,3 +92,13 @@ class DemoContextRead(StrictSchema):
     store_name: str
     customers: list[DemoCustomerRead]
     featured_orders: list[str] = Field(default_factory=list)
+
+
+class DemoRuntimeRead(StrictSchema):
+    provider: str
+    model_name: str
+    model_mode: str
+    uses_external_api: bool
+    evaluation_case_count: int
+    input_cost_per_million: Decimal
+    output_cost_per_million: Decimal

@@ -15,12 +15,14 @@ from app.commerce.services import (
     OrderService,
     ShipmentService,
 )
+from app.core.config import get_settings
 from app.db.session import get_db_session
-from app.models import Customer, Order, Product, Store, Tenant
+from app.models import Customer, Order, Product, ProductVariant, Shipment, Store, Tenant
 from app.schemas.commerce import (
     AfterSaleRead,
     DemoContextRead,
     DemoCustomerRead,
+    DemoRuntimeRead,
     OrderEligibilityRead,
     OrderItemRead,
     OrderRead,
@@ -33,6 +35,43 @@ from app.schemas.commerce import (
 router = APIRouter(prefix="/api/v1")
 SessionDependency = Annotated[AsyncSession, Depends(get_db_session)]
 ContextDependency = Annotated[CommerceContext, Depends(get_commerce_context)]
+
+
+@router.get("/demo/runtime", response_model=DemoRuntimeRead, tags=["demo"])
+async def get_demo_runtime() -> DemoRuntimeRead:
+    settings = get_settings()
+    return DemoRuntimeRead(
+        provider=settings.model_provider,
+        model_name=settings.model_name,
+        model_mode=(
+            "non-thinking" if settings.model_provider == "deepseek" else "provider-default"
+        ),
+        uses_external_api=settings.model_provider != "mock",
+        evaluation_case_count=60,
+        input_cost_per_million=settings.model_input_cost_per_million,
+        output_cost_per_million=settings.model_output_cost_per_million,
+    )
+
+
+def demo_prompts(
+    orders: list[tuple[str, str, bool]],
+    featured_product_name: str | None,
+) -> list[str]:
+    prompts = ["无理由退货政策是多少天？", "查看我的订单"]
+    if featured_product_name is not None:
+        prompts.insert(0, f"推荐有库存的{featured_product_name}")
+    if orders:
+        prompts.append(f"帮我查订单 {orders[0][0]}")
+    shipped_order = next((number for number, _status, has_shipment in orders if has_shipment), None)
+    if shipped_order is not None:
+        prompts.append(f"订单 {shipped_order} 的物流到哪了？")
+    cancellable_order = next(
+        (number for number, status, _has_shipment in orders if status in {"pending", "paid"}),
+        None,
+    )
+    if cancellable_order is not None:
+        prompts.append(f"帮我取消订单 {cancellable_order}，我不想要了")
+    return prompts
 
 
 def product_response(product: Product) -> ProductRead:
@@ -93,6 +132,40 @@ async def list_demo_contexts(session: SessionDependency) -> list[DemoContextRead
                 .order_by(Customer.display_name)
             )
         )
+        order_rows = (
+            await session.execute(
+                select(
+                    Order.customer_id,
+                    Order.order_number,
+                    Order.status,
+                    Shipment.id.is_not(None),
+                )
+                .outerjoin(Shipment, Shipment.order_id == Order.id)
+                .where(Order.tenant_id == tenant.id, Order.store_id == store.id)
+                .order_by(Order.created_at.desc())
+            )
+        ).all()
+        customer_orders: dict[UUID, list[tuple[str, str, bool]]] = {}
+        for customer_id, order_number, order_status, has_shipment in order_rows:
+            customer_orders.setdefault(customer_id, []).append(
+                (order_number, order_status, has_shipment)
+            )
+        in_stock_product_names = list(
+            await session.scalars(
+                select(Product.name)
+                .where(
+                    Product.tenant_id == tenant.id,
+                    Product.store_id == store.id,
+                    Product.status == "active",
+                    Product.variants.any(ProductVariant.stock_quantity > 0),
+                )
+                .order_by(Product.name)
+            )
+        )
+        featured_product_name = next(
+            (name for name in in_stock_product_names if "降噪" in name),
+            in_stock_product_names[0] if in_stock_product_names else None,
+        )
         featured_orders = list(
             await session.scalars(
                 select(Order.order_number)
@@ -112,6 +185,9 @@ async def list_demo_contexts(session: SessionDependency) -> list[DemoContextRead
                         id=customer.id,
                         display_name=customer.display_name,
                         membership_level=customer.membership_level,
+                        sample_prompts=demo_prompts(
+                            customer_orders.get(customer.id, []), featured_product_name
+                        ),
                     )
                     for customer in customers
                 ],

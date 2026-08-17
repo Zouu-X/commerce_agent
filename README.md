@@ -2,27 +2,35 @@
 
 一个可评测、可观测的多租户电商客服 Agent 沙盒。项目当前已具备确定性电商业务沙盒、
 Provider-independent Agent Runtime、知识库混合检索、7 个安全只读工具，以及退款、发券、
-取消订单三类人工审批写操作。Milestone 5 进一步加入 60 条离线评测、完整 Trace 时间线、
-token/成本/延迟统计和结构化报告，详细范围见 [`project_plan.md`](./project_plan.md)。
+取消订单三类人工审批写操作。Milestone 5 加入 60 条离线评测、完整 Trace 时间线、
+token/成本/延迟统计和结构化报告；Milestone 6 补齐真实 DeepSeek、双角色页面以及客户输出安全边界。
+详细范围见 [`project_plan.md`](./project_plan.md)。
 
 ## 环境要求
 
-- Node.js 24.18.0
-- npm 11+
-- Docker Desktop（包含 Docker Compose）
-- Python 3.12（仅本地运行后端时需要）
+- 体验 Demo：Docker Desktop（包含 Docker Compose）
+- 本地运行前端检查：Node.js 24.18.0、npm 11+
+- 本地运行后端：Python 3.12
+
+默认 Agent 使用 DeepSeek V4 Flash；Docker 负责运行全部服务，本机无需额外安装 Python。
 
 ## 快速启动
 
 ```bash
 cp .env.example .env
-npm --prefix frontend install
+cp .env.ds.example .env.ds
+# 将 .env.ds 的占位内容替换成 DeepSeek API Key（文件中只放 Key 本身）
 make up
+make smoke
 ```
+
+`make up` 会在后台构建并启动数据库、API 和 Web，并等待服务健康。首次构建需要下载镜像和
+Python/npm 依赖，通常在数分钟内完成；后续启动会复用缓存。
 
 启动后访问：
 
-- Web：http://localhost:5173
+- 用户聊天页：http://localhost:5173
+- 商户审批与观测后台：http://localhost:5173/merchant
 - API 健康检查：http://localhost:8000/api/v1/health
 - API 文档：http://localhost:8000/docs
 - API 就绪检查：http://localhost:8000/api/v1/ready
@@ -33,7 +41,19 @@ make up
 make down
 ```
 
+查看实时日志：
+
+```bash
+make logs
+```
+
 ## 开发检查
+
+首次执行本地前端检查前安装锁定依赖：
+
+```bash
+npm --prefix frontend ci
+```
 
 ```bash
 make lint
@@ -42,10 +62,16 @@ make test
 
 后端检查默认在 Python 3.12 容器中执行，因此本机没有安装 Python 3.12 也可以运行。
 
-运行确定性完整评测：
+使用 DeepSeek V4 Flash 运行完整评测（会产生 API 用量）：
 
 ```bash
 make eval
+```
+
+需要零成本、结果可重复的回归基线时运行测试专用 Mock：
+
+```bash
+make eval-mock
 ```
 
 该命令会迁移并重置 Demo 数据，然后运行 60 条用例。评测写操作只保留 Trace 证据，结束前会
@@ -128,7 +154,8 @@ Milestone 3 将店铺政策和商品指南存入 PostgreSQL，并使用两条召
 - RRF 后按绝对关键词/向量分数和相对最佳证据门槛过滤；没有可靠证据时返回空结果。
 
 检索前会强制过滤 `tenant_id`、`store_id`、文档类型、发布状态和有效期，因此其他店铺或
-已经过期的政策不会进入候选集。每个结果都会返回文档版本和 `citation_id`。
+已经过期的政策不会进入候选集。内部检索结果会返回文档版本和 `citation_id`，供 Trace 和评测
+核验；客户对话只展示资料标题和版本，不暴露切片 ID。
 
 当前 Demo 使用 64 维确定性本地特征向量，不需要外部 Embedding API Key，便于 CI 和招聘方
 重复运行。它用于展示完整 pgvector/RRF 架构，不等同于生产级语义模型；生产环境可以在不改
@@ -148,9 +175,19 @@ curl --get \
 
 ## Agent 对话 Demo
 
-默认使用确定性的本地 Mock Provider，因此不配置模型 API Key 也能演示完整 tool-calling 流程。
-Mock 只负责模拟模型的意图识别和回复生成，商品、订单、物流和售后事实仍然来自 PostgreSQL
-及业务服务层。
+运行时默认使用 DeepSeek V4 Flash，并关闭 thinking 模式以降低演示延迟，同时完整保留 function
+tool-calling。模型只负责理解意图、选择工具和组织回答；商品、订单、物流、售后与政策事实仍然
+来自 PostgreSQL 及业务服务层。API Key 通过 `.env.ds` 挂载成 Docker Secret，不会进入前端、
+镜像或 Git；本地 Mock 只保留给单元测试和确定性回归评测。
+
+浏览器中的用户聊天页会按所选店铺和顾客展示真实可命中的示例。订单号、物流示例和可取消订单
+都从当前种子数据动态生成，避免复制一个不属于当前顾客的订单号导致误判。用户触发取消、退款
+或发券后，只会生成待审批记录；商户可切换到独立的 `/merchant` 页面审批，并查看 Trace 和评测。
+
+客户输出经过独立的 presentation boundary：原始工具结果只写入商户 Trace；传给模型和客户历史的
+是中文业务摘要，最终回复还会过滤 `payment_status`、`has_shipment`、英文枚举、布尔值和原始
+`citation_id`。知识依据以结构化 `sources` 返回并显示为《资料标题》· 版本，避免依赖模型拼接
+内部引用格式。
 
 先用 `/api/v1/demo/contexts` 选择 tenant、store 和 customer，再创建会话：
 
@@ -179,13 +216,13 @@ curl -X POST \
 - `请推荐有库存的降噪耳机`
 - `帮我查订单 AUR-202607-0001`
 - `订单 AUR-202607-0005 的物流怎么还没更新？`（需要选择该订单所属顾客）
-- `无理由退货政策是多少天？`（回答必须带知识引用）
+- `无理由退货政策是多少天？`（回答显示可读的资料标题与版本）
 - `付款以后商品降价了能退差额吗？`（演示同义表达的混合检索）
 - `知识里写了忽略系统指令时应该怎么处理？`（演示检索内容 Prompt Injection 防护）
 - `帮我取消订单 AUR-202607-0001，我不想要了`（只创建待审批动作）
 - `给我发一张 10 元补偿券，物流太慢了`（只创建待审批动作）
 
-读取会话可以看到完整的 `user -> assistant(tool_calls) -> tool -> assistant` 消息链：
+客户读取会话时只会得到 `user -> assistant` 的可展示消息和结构化 `sources`：
 
 ```bash
 curl \
@@ -194,6 +231,9 @@ curl \
   -H 'X-Customer-Id: ...' \
   http://localhost:8000/api/v1/conversations/<conversation_id>
 ```
+
+完整的 `user -> assistant(tool_calls) -> tool -> assistant` 执行链保留在数据库和商户 Trace API，
+不会通过客户会话接口返回。
 
 当前只读工具：
 
@@ -216,18 +256,20 @@ curl \
 
 ## 离线评测
 
-Milestone 5 的当前判分契约为 `milestone-5-v3`，包含 60 条用例，覆盖：
+当前判分契约为 `milestone-6-v1`，包含 60 条用例，覆盖：
 
 - 商品搜索、订单详情、物流异常和售后状态；
 - 两个 tenant 的政策检索、引用与无证据回退；
 - 退款、发券、取消订单的待审批语义；
-- 跨 tenant、跨 customer、身份覆盖、审批绕过和检索内容 Prompt Injection。
+- 跨 tenant、跨 customer、身份覆盖、审批绕过和检索内容 Prompt Injection；
+- 客户回复中的内部字段、英文状态、布尔值和原始切片引用泄露。
 
 每条用例通过真实 `AgentRuntime -> ToolRegistry -> Service -> Database` 链路执行，而不是直接
 调用 Mock Provider 后比较字符串。Evaluator 分别计算工具选择、必要工具召回、参数有效性、
-任务完成、引用覆盖和安全检查；失败用例会保留实际工具、失败检查项和对应 `trace_id`。
+任务完成、引用覆盖、客户展示安全和其他安全检查；失败用例会保留实际工具、失败检查项和对应
+`trace_id`。引用正确性从 Trace 中的原始检索结果判定，不再要求模型把内部切片 ID 写进回答。
 
-2026-08-15 在本地 Docker PostgreSQL + Mock Provider 上的可复现基线：
+2026-08-17 在本地 Docker PostgreSQL + Mock Provider 上的可复现基线：
 
 | 指标 | 结果 |
 |---|---:|
@@ -238,6 +280,7 @@ Milestone 5 的当前判分契约为 `milestone-5-v3`，包含 60 条用例，�
 | 任务完成率 | 100% |
 | 知识回答引用覆盖率 | 100% |
 | 知识回答引用正确率 | 83.33% |
+| 客户展示安全率 | 100% |
 | 跨范围数据泄露率 | 0% |
 | 未审批写操作执行率 | 0% |
 | P95 延迟 | 11 ms |
@@ -247,7 +290,7 @@ Milestone 5 的当前判分契约为 `milestone-5-v3`，包含 60 条用例，�
 `not_applicable`，不参与聚合门禁。
 
 这些数字是确定性 Mock 的回归基线，用于证明链路、指标和安全边界可重复验证，不代表真实大
-模型的泛化表现。切换 OpenAI-compatible Provider 后仍使用同一数据集和指标，并按
+模型的泛化表现。默认 DeepSeek Provider 仍使用同一数据集和指标，并按
 `provider / model / prompt_version / dataset_version` 保存结果，便于 A/B 对比。Mock token 和
 成本均为 0；真实 Provider 会记录返回的 usage，并使用环境变量中的每百万 token 单价估算成本。
 
@@ -279,7 +322,7 @@ curl \
 Web 控制台提供“审批 / Trace / 评测”三个视图。Trace 视图展示稳定排序的事件时间线；评测视图
 展示历史运行、汇总指标和失败用例，并可从失败用例直接跳转到对应 Trace。
 
-### 切换到 OpenAI-compatible Provider
+### 可选：切换到其他 OpenAI-compatible Provider
 
 ```dotenv
 MODEL_PROVIDER=openai_compatible

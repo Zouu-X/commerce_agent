@@ -21,15 +21,30 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-development}
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://commerce:commerce@db:5432/commerce}
-      MODEL_PROVIDER: ${MODEL_PROVIDER:-mock}
-      MODEL_NAME: ${MODEL_NAME:-mock-commerce-agent}
-      MODEL_BASE_URL: ${MODEL_BASE_URL:-https://api.openai.com/v1}
+      MODEL_PROVIDER: ${MODEL_PROVIDER:-deepseek}
+      MODEL_NAME: ${MODEL_NAME:-deepseek-v4-flash}
+      MODEL_BASE_URL: ${MODEL_BASE_URL:-https://api.deepseek.com}
       MODEL_API_KEY: ${MODEL_API_KEY:-}
-      MODEL_INPUT_COST_PER_MILLION: ${MODEL_INPUT_COST_PER_MILLION:-0}
-      MODEL_OUTPUT_COST_PER_MILLION: ${MODEL_OUTPUT_COST_PER_MILLION:-0}
+      MODEL_API_KEY_FILE: ${MODEL_API_KEY_FILE:-/run/secrets/deepseek_api_key}
+      MODEL_INPUT_COST_PER_MILLION: ${MODEL_INPUT_COST_PER_MILLION:-0.14}
+      MODEL_OUTPUT_COST_PER_MILLION: ${MODEL_OUTPUT_COST_PER_MILLION:-0.28}
+    secrets:
+      - deepseek_api_key
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/ready', timeout=2)",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
     ports:
       - "8000:8000"
     volumes:
@@ -39,9 +54,19 @@ services:
     build:
       context: ./frontend
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
     ports:
       - "5173:80"
 
 volumes:
   postgres_data:
+
+secrets:
+  deepseek_api_key:
+    file: ./.env.ds

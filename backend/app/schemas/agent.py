@@ -21,6 +21,11 @@ class MessageCreate(StrictSchema):
         return stripped
 
 
+class CustomerSourceRead(StrictSchema):
+    title: str
+    version: str
+
+
 class MessageRead(StrictSchema):
     id: UUID
     sequence: int
@@ -29,6 +34,7 @@ class MessageRead(StrictSchema):
     tool_call_id: str | None
     tool_name: str | None
     tool_calls: list[dict[str, Any]]
+    sources: list[CustomerSourceRead] = Field(default_factory=list)
     created_at: datetime
 
 

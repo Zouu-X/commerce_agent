@@ -1,4 +1,5 @@
-from typing import Annotated
+import json
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
@@ -13,7 +14,13 @@ from app.commerce.context import CommerceContext
 from app.core.config import get_settings
 from app.db.session import get_db_session
 from app.models import Conversation, Message
-from app.schemas.agent import AgentTurnRead, ConversationRead, MessageCreate, MessageRead
+from app.schemas.agent import (
+    AgentTurnRead,
+    ConversationRead,
+    CustomerSourceRead,
+    MessageCreate,
+    MessageRead,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["agent"])
 SessionDependency = Annotated[AsyncSession, Depends(get_db_session)]
@@ -21,7 +28,9 @@ ContextDependency = Annotated[CommerceContext, Depends(get_commerce_context)]
 ProviderDependency = Annotated[ModelProvider, Depends(get_model_provider)]
 
 
-def message_response(message: Message) -> MessageRead:
+def message_response(
+    message: Message, *, sources: list[CustomerSourceRead] | None = None
+) -> MessageRead:
     return MessageRead(
         id=message.id,
         sequence=message.sequence,
@@ -30,6 +39,7 @@ def message_response(message: Message) -> MessageRead:
         tool_call_id=message.tool_call_id,
         tool_name=message.tool_name,
         tool_calls=message.tool_calls_json or [],
+        sources=sources or [],
         created_at=message.created_at,
     )
 
@@ -37,6 +47,20 @@ def message_response(message: Message) -> MessageRead:
 def conversation_response(
     conversation: Conversation, messages: list[Message]
 ) -> ConversationRead:
+    customer_messages: list[MessageRead] = []
+    turn_sources: list[CustomerSourceRead] = []
+    for message in messages:
+        if message.role == "user":
+            turn_sources = []
+            customer_messages.append(message_response(message))
+            continue
+        if message.role == "tool":
+            turn_sources.extend(_sources_from_tool_message(message.content))
+            continue
+        if message.role == "assistant" and not message.tool_calls_json:
+            customer_messages.append(
+                message_response(message, sources=_deduplicate_sources(turn_sources))
+            )
     return ConversationRead(
         id=conversation.id,
         status=conversation.status,
@@ -45,7 +69,7 @@ def conversation_response(
         customer_id=conversation.customer_id,
         created_at=conversation.created_at,
         updated_at=conversation.updated_at,
-        messages=[message_response(message) for message in messages],
+        messages=customer_messages,
     )
 
 
@@ -114,9 +138,39 @@ async def send_message(
     return AgentTurnRead(
         trace_id=result.trace_id,
         conversation_id=conversation.id,
-        message=message_response(result.message),
+        message=message_response(
+            result.message,
+            sources=[
+                CustomerSourceRead(title=source.title, version=source.version)
+                for source in result.sources
+            ],
+        ),
         model_loops=result.model_loops,
         tool_calls=result.tool_calls,
         input_tokens=result.usage.input_tokens,
         output_tokens=result.usage.output_tokens,
     )
+
+
+def _sources_from_tool_message(content: str) -> list[CustomerSourceRead]:
+    try:
+        parsed: Any = json.loads(content)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(parsed, dict):
+        return []
+    sources = parsed.get("sources")
+    if not isinstance(sources, list):
+        return []
+    return [
+        CustomerSourceRead(title=str(item["title"]), version=str(item.get("version", "")))
+        for item in sources
+        if isinstance(item, dict) and item.get("title")
+    ]
+
+
+def _deduplicate_sources(sources: list[CustomerSourceRead]) -> list[CustomerSourceRead]:
+    unique: dict[tuple[str, str], CustomerSourceRead] = {}
+    for source in sources:
+        unique.setdefault((source.title, source.version), source)
+    return list(unique.values())
