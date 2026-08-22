@@ -98,10 +98,18 @@ async def test_refund_rules_reject_excess_and_expired_requests(
         requested_refund_amount=Decimal("50.00"),
         as_of=BASE_TIME + timedelta(days=10),
     )
+    delivery_failed = await service.evaluate(
+        context("aurora", 5),
+        "AUR-202607-0006",
+        requested_refund_amount=Decimal("50.00"),
+        as_of=BASE_TIME + timedelta(days=100),
+    )
 
     assert eligible["can_request_refund"] is True
     assert excessive["refund_reason"] == "REFUND_AMOUNT_EXCEEDS_PAID_AMOUNT"
     assert expired["refund_reason"] == "RETURN_WINDOW_EXPIRED"
+    assert delivery_failed["can_request_refund"] is True
+    assert delivery_failed["refund_reason"] is None
 
 
 @pytest.mark.anyio

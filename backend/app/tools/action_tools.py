@@ -42,11 +42,16 @@ class RequestCouponArgs(ActionToolArguments):
     order_number: str | None = Field(default=None, min_length=1, max_length=40)
 
 
-def _action_data(action: PendingAction) -> dict[str, Any]:
+def _action_data(
+    action: PendingAction,
+    *,
+    request_state: str = "created",
+) -> dict[str, Any]:
     return {
         "action_id": str(action.id),
         "action_type": action.action_type,
         "status": action.status,
+        "request_state": request_state,
         "requires_approval": True,
         "payload": action.payload_json,
     }
@@ -54,12 +59,16 @@ def _action_data(action: PendingAction) -> dict[str, Any]:
 
 class ActionToolHandlers:
     def __init__(self, session: AsyncSession, context: ToolContext) -> None:
+        self._context = context
         self._service = ActionRequestService(session, context)
 
     async def request_order_cancellation(self, raw_args: BaseModel) -> dict[str, Any]:
         args = cast(RequestOrderCancellationArgs, raw_args)
         action = await self._service.request_cancellation(args.order_number, args.reason)
-        return _action_data(action)
+        request_state = (
+            "created" if action.trace_id == self._context.trace_id else "already_pending"
+        )
+        return _action_data(action, request_state=request_state)
 
     async def request_refund(self, raw_args: BaseModel) -> dict[str, Any]:
         args = cast(RequestRefundArgs, raw_args)

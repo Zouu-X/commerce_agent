@@ -20,6 +20,14 @@ def headers(customer_index: int) -> dict[str, str]:
     }
 
 
+def approval_headers() -> dict[str, str]:
+    return {
+        "X-Tenant-Id": str(stable_id("tenant:aurora")),
+        "X-Store-Id": str(stable_id("store:aurora")),
+        "X-Approver-Id": "ops-reviewer@example.com",
+    }
+
+
 async def create_conversation(client: httpx.AsyncClient, customer_index: int) -> str:
     response = await client.post("/api/v1/conversations", headers=headers(customer_index))
     assert response.status_code == 201
@@ -326,3 +334,87 @@ async def test_agent_creates_pending_cancellation_without_changing_order(
     messages = persisted.json()["messages"]
     assert [message["role"] for message in messages] == ["user", "assistant"]
     assert messages[1]["tool_calls"] == []
+
+
+@pytest.mark.anyio
+async def test_delivery_failed_refund_reaches_merchant_approval_and_executes(
+    db_session: AsyncSession,
+) -> None:
+    async def override_session() -> AsyncIterator[AsyncSession]:
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_session
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            conversation_id = await create_conversation(client, 5)
+            turn = await client.post(
+                f"/api/v1/conversations/{conversation_id}/messages",
+                headers=headers(5),
+                json={
+                    "content": "订单 AUR-202607-0006 配送失败，申请退款 352 元"
+                },
+            )
+            pending = await client.get(
+                "/api/v1/approvals?status=pending", headers=approval_headers()
+            )
+            action_id = pending.json()[0]["id"]
+            approved = await client.post(
+                f"/api/v1/approvals/{action_id}/approve",
+                headers=approval_headers(),
+            )
+            order = await client.get(
+                "/api/v1/orders/AUR-202607-0006", headers=headers(5)
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert turn.status_code == 200
+    assert "待人工审批" in turn.json()["message"]["content"]
+    assert "审批前不会修改" in turn.json()["message"]["content"]
+    assert pending.status_code == 200
+    assert len(pending.json()) == 1
+    assert pending.json()[0]["action_type"] == "refund"
+    assert pending.json()[0]["payload"]["order_number"] == "AUR-202607-0006"
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "succeeded"
+    assert order.json()["payment_status"] == "refunded"
+
+
+@pytest.mark.anyio
+async def test_repeated_cancellation_across_conversations_reuses_pending_action(
+    db_session: AsyncSession,
+) -> None:
+    async def override_session() -> AsyncIterator[AsyncSession]:
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_session
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            first_conversation = await create_conversation(client, 0)
+            first = await client.post(
+                f"/api/v1/conversations/{first_conversation}/messages",
+                headers=headers(0),
+                json={"content": "帮我取消订单 AUR-202607-0001，我不想要了"},
+            )
+            second_conversation = await create_conversation(client, 0)
+            repeated = await client.post(
+                f"/api/v1/conversations/{second_conversation}/messages",
+                headers=headers(0),
+                json={"content": "取消订单 AUR-202607-0001"},
+            )
+            pending = await client.get(
+                "/api/v1/approvals?status=pending", headers=approval_headers()
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert first.status_code == 200
+    assert "待人工审批" in first.json()["message"]["content"]
+    assert repeated.status_code == 200
+    assert "已经提交" in repeated.json()["message"]["content"]
+    assert "无需重复" in repeated.json()["message"]["content"]
+    assert pending.status_code == 200
+    assert len(pending.json()) == 1
+    assert pending.json()[0]["action_type"] == "cancel_order"

@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import UUID, uuid4
@@ -21,6 +21,7 @@ from app.approvals.errors import (
     InvalidActionTransitionError,
 )
 from app.commerce.context import CommerceContext
+from app.commerce.refund_policy import refund_window_is_open
 from app.commerce.services import OrderService
 from app.models import ActionAuditLog, CouponGrant, Order, PendingAction, RefundTransaction
 from app.tools.context import ToolContext
@@ -28,6 +29,7 @@ from app.tools.context import ToolContext
 Clock = Callable[[], datetime]
 MAX_COUPON_AMOUNT = Decimal("50.00")
 MONEY_QUANTUM = Decimal("0.01")
+ACTIVE_ACTION_STATUSES = ("pending", "approved", "executing")
 
 
 def utc_now() -> datetime:
@@ -66,6 +68,11 @@ class ActionRequestService:
 
     async def request_cancellation(self, order_number: str, reason: str) -> PendingAction:
         order = await OrderService(self._session).get_order(self._context, order_number)
+        existing = await self._find_active_order_action(
+            "cancel_order", order.order_number
+        )
+        if existing is not None:
+            return existing
         if order.status not in {"pending", "paid"}:
             raise ActionValidationError(f"ORDER_STATUS_{order.status.upper()}")
         return await self._create(
@@ -129,10 +136,9 @@ class ActionRequestService:
             raise ActionValidationError("PAYMENT_NOT_COMPLETED")
         if order.status not in {"shipped", "delivered"}:
             raise ActionValidationError(f"ORDER_STATUS_{order.status.upper()}")
-        created_at = order.created_at
-        if created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=UTC)
-        if self._clock() - created_at > timedelta(days=7):
+        if not await refund_window_is_open(
+            self._session, order, as_of=self._clock()
+        ):
             raise ActionValidationError("RETURN_WINDOW_EXPIRED")
         refunded = await self._session.scalar(
             select(func.coalesce(func.sum(RefundTransaction.amount), 0)).where(
@@ -191,6 +197,33 @@ class ActionRequestService:
             .options(selectinload(PendingAction.audit_logs))
         )
         return action
+
+    async def _find_active_order_action(
+        self,
+        action_type: str,
+        order_number: str,
+    ) -> PendingAction | None:
+        actions = list(
+            await self._session.scalars(
+                select(PendingAction)
+                .where(
+                    PendingAction.tenant_id == self._tool_context.tenant_id,
+                    PendingAction.store_id == self._tool_context.store_id,
+                    PendingAction.customer_id == self._tool_context.customer_id,
+                    PendingAction.action_type == action_type,
+                    PendingAction.status.in_(ACTIVE_ACTION_STATUSES),
+                )
+                .order_by(PendingAction.created_at)
+            )
+        )
+        return next(
+            (
+                action
+                for action in actions
+                if action.payload_json.get("order_number") == order_number
+            ),
+            None,
+        )
 
     def _idempotency_key(self, action_type: str, payload: dict[str, Any]) -> str:
         material = json.dumps(
@@ -386,10 +419,9 @@ class ApprovalService:
             raise ActionExecutionError(f"ORDER_STATUS_{order.status.upper()}")
         if order.payment_status not in {"paid", "partially_refunded"}:
             raise ActionExecutionError("PAYMENT_NOT_REFUNDABLE")
-        created_at = order.created_at
-        if created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=UTC)
-        if self._clock() - created_at > timedelta(days=7):
+        if not await refund_window_is_open(
+            self._session, order, as_of=self._clock()
+        ):
             raise ActionExecutionError("RETURN_WINDOW_EXPIRED")
 
         refunded = await self._session.scalar(
