@@ -1,8 +1,9 @@
-.PHONY: up down logs smoke test lint frontend-install seed reset-demo migrate eval eval-mock
+.PHONY: up down logs smoke test lint frontend-install seed reset-demo migrate eval eval-mock eval-retrieval
 
 DOCKER ?= docker
 API_URL ?= http://localhost:8000
 WEB_URL ?= http://localhost:5173
+RETRIEVAL_SPLIT ?= all
 
 up:
 	$(DOCKER) compose up --build --detach --wait
@@ -38,6 +39,10 @@ eval:
 eval-mock:
 	$(DOCKER) compose build api
 	MODEL_PROVIDER=mock MODEL_NAME=mock-commerce-agent MODEL_INPUT_COST_PER_MILLION=0 MODEL_OUTPUT_COST_PER_MILLION=0 $(DOCKER) compose run --rm api sh -c "alembic upgrade head && python -m app.commerce.seed && python -m app.evaluations.cli --output-dir /app/eval-results"
+
+eval-retrieval:
+	$(DOCKER) compose build api
+	$(DOCKER) compose run --rm api sh -c "alembic upgrade head && python -m app.commerce.seed && python -m app.evaluations.retrieval_cli --split $(RETRIEVAL_SPLIT) --output-dir /app/eval-results"
 
 frontend-install:
 	npm --prefix frontend install

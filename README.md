@@ -78,6 +78,23 @@ make eval-mock
 清理自己创建的待审批记录，不污染人工审批队列。报告同时写入数据库和
 `eval-results/evaluation-<run_id>.json`，`eval-results/latest.json` 指向最近一次结果。
 
+只评测 RAG 检索、不经过 Agent 和生成模型：
+
+```bash
+make eval-retrieval
+```
+
+该命令会重置为确定性 Demo 数据并运行 100 条逐条带标注理由、可人工审查的 Retrieval Gold Set。
+也可以只运行用于调参的 75 条 `dev`，或冻结的 25 条 `holdout`：
+
+```bash
+make eval-retrieval RETRIEVAL_SPLIT=dev
+make eval-retrieval RETRIEVAL_SPLIT=holdout
+```
+
+报告写入 `eval-results/retrieval-evaluation-<timestamp>.json`，最近一次结果同步到
+`eval-results/retrieval-latest.json`。
+
 ## 电商沙盒
 
 API 启动时会自动执行 Alembic 迁移，并在空数据库中导入确定性 Demo 数据。数据包括 2 个
@@ -298,6 +315,25 @@ curl \
 模型的泛化表现。默认 DeepSeek Provider 仍使用同一数据集和指标，并按
 `provider / model / prompt_version / dataset_version` 保存结果，便于 A/B 对比。Mock token 和
 成本均为 0；真实 Provider 会记录返回的 usage，并使用环境变量中的每百万 token 单价估算成本。
+
+### Retrieval Gold Set
+
+Agent 端到端评测之外，项目还维护独立的 `retrieval-gold-v1`。它以稳定的
+`source_key:version` 为判断单位，不依赖可能随切片策略变化的 `chunk-N`；原始命中仍会保留完整
+`citation_id` 供诊断。100 条用例固定拆分为 75 条 dev 和 25 条 holdout，覆盖：
+
+- 精确问法、口语改写、隐含意图、数字和订单号噪声；
+- 退款/退货、配送失败/物流停滞/延迟补偿等 hard negative；
+- 多政策和跨文档类型的复合问题；
+- 两家店铺的不同规则、历史版本和当前版本；
+- Prompt Injection 安全知识以及无答案/OOD 查询。
+
+每条标签包含 1～3 级相关度、已知 hard negative、禁止出现的版本、标注理由和场景标签。
+Runner 直接调用 `KnowledgeSearchService`，不经过工具路由、Prompt 或模型生成，输出
+Recall@1/3/5、Precision@3、MRR、nDCG@5、无答案误召回率、hard-negative 命中率、禁止来源
+命中率和 scope 泄漏率。每份报告同时记录检索配置、Embedding 实现和数据集版本，后续可以对
+关键词检索、当前哈希向量、真实 Embedding 和 reranker 做同集 A/B。全量报告还会分别汇总 dev
+和 holdout，并为失败用例保存命中分数、缺失来源和明确失败原因。
 
 评测 API：
 
