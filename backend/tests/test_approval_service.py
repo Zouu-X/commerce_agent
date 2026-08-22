@@ -1,4 +1,5 @@
 from dataclasses import replace
+from datetime import datetime
 from decimal import Decimal
 from uuid import uuid4
 
@@ -128,6 +129,31 @@ async def test_refund_and_coupon_execute_once(db_session: AsyncSession) -> None:
     assert coupon_count == 1
 
 
+async def test_delivery_failed_refund_stays_eligible_for_manual_review(
+    db_session: AsyncSession,
+) -> None:
+    def late_clock() -> datetime:
+        return BASE_TIME.replace(year=BASE_TIME.year + 1)
+
+    request = await ActionRequestService(
+        db_session, await tool_context(db_session, 5), clock=late_clock
+    ).request_refund("AUR-202607-0006", Decimal("352.00"), "配送失败")
+
+    assert request.status == "pending"
+    order = await OrderService(db_session).get_order(
+        commerce_context(5), "AUR-202607-0006"
+    )
+    assert order.payment_status == "paid"
+
+    approved = await ApprovalService(
+        db_session, approval_context(), clock=late_clock
+    ).approve(request.id)
+
+    assert approved.status == "succeeded"
+    assert approved.result_json is not None
+    assert approved.result_json["payment_status"] == "refunded"
+
+
 async def test_approval_scope_hides_other_store_actions(db_session: AsyncSession) -> None:
     action = await ActionRequestService(
         db_session, await tool_context(db_session, 0), clock=lambda: BASE_TIME
@@ -187,6 +213,27 @@ async def test_idempotency_is_scoped_to_one_agent_turn(db_session: AsyncSession)
     assert retry.id == first.id
     assert second.id != first.id
     assert action_count == 2
+
+
+async def test_active_cancellation_is_reused_across_conversations(
+    db_session: AsyncSession,
+) -> None:
+    first_context = await tool_context(db_session, 0)
+    first = await ActionRequestService(
+        db_session, first_context, clock=lambda: BASE_TIME
+    ).request_cancellation("AUR-202607-0001", "第一次申请")
+
+    second_context = replace(await tool_context(db_session, 0), trace_id=uuid4())
+    repeated = await ActionRequestService(
+        db_session, second_context, clock=lambda: BASE_TIME
+    ).request_cancellation("AUR-202607-0001", "刷新页面后再次申请")
+    action_count = await db_session.scalar(
+        select(func.count()).select_from(PendingAction)
+    )
+
+    assert repeated.id == first.id
+    assert repeated.conversation_id == first_context.conversation_id
+    assert action_count == 1
 
 
 @pytest.mark.parametrize("amount", [Decimal("10.001"), Decimal("0.001")])

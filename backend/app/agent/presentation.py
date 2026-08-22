@@ -52,6 +52,16 @@ _ACTION_LABEL = {
     "issue_coupon": "补偿券",
 }
 
+_CUSTOMER_ERROR_SUMMARIES = {
+    "RETURN_WINDOW_EXPIRED": "该订单已超过可申请退款的时间范围，本次没有创建退款申请。",
+    "PAYMENT_NOT_COMPLETED": "该订单尚未完成付款，当前不能创建退款申请。",
+    "PAYMENT_NOT_REFUNDABLE": "该订单的付款状态当前不支持退款，本次没有创建退款申请。",
+    "REFUND_AMOUNT_EXCEEDS_PAID_AMOUNT": "申请退款金额超过订单已付款金额，本次没有创建退款申请。",
+    "REFUND_AMOUNT_EXCEEDS_REMAINING": "申请退款金额超过订单剩余可退金额，本次没有创建退款申请。",
+    "AMOUNT_PRECISION_INVALID": "申请金额格式不正确，请使用最多两位小数的金额。",
+    "COUPON_AMOUNT_OUT_OF_RANGE": "补偿券金额超出允许范围，本次没有创建申请。",
+}
+
 _CITATION_WRAPPER_RE = re.compile(
     r"[（(]?\s*citation\s*[:：]\s*[`'\"]?[\w-]+:v\d+#chunk-\d+[`'\"]?\s*[)）]?",
     re.IGNORECASE,
@@ -64,7 +74,11 @@ _BOOLEAN_RE = re.compile(r"\b(?:true|false|null)\b", re.IGNORECASE)
 def present_tool_result(tool_name: str, result: dict[str, Any]) -> PresentedToolResult:
     if result.get("ok") is not True:
         code = str((result.get("error") or {}).get("code", "tool_error"))
-        if code.endswith("not_found"):
+        if code in _CUSTOMER_ERROR_SUMMARIES:
+            summary = _CUSTOMER_ERROR_SUMMARIES[code]
+        elif code.startswith("ORDER_STATUS_"):
+            summary = "该订单当前状态不支持这项操作，本次没有创建申请。"
+        elif code.endswith("not_found"):
             summary = "当前账号下未找到对应记录，请核对信息后再试。"
         elif code == "invalid_arguments":
             summary = "提供的信息还不完整，请补充后再试。"
@@ -196,6 +210,16 @@ def present_tool_result(tool_name: str, result: dict[str, Any]) -> PresentedTool
         payload = data.get("payload") or {}
         target = payload.get("order_number")
         target_text = f"订单 {target} 的" if target else ""
+        if data.get("request_state") == "already_pending":
+            return PresentedToolResult(
+                data={
+                    "summary": (
+                        f"{target_text}{action_label}申请已经提交，当前正在等待人工审批，"
+                        "无需重复申请。审批前不会修改订单、退款或优惠券数据。"
+                    )
+                },
+                sources=[],
+            )
         return PresentedToolResult(
             data={
                 "summary": (

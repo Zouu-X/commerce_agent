@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.commerce.context import CommerceContext
 from app.commerce.errors import ResourceNotFoundError
+from app.commerce.refund_policy import refund_window_is_open
 from app.models import AfterSale, Order, OrderItem, Product, ProductVariant, Shipment
 
 
@@ -175,6 +176,7 @@ class AfterSaleService:
 
 class OrderPolicyService:
     def __init__(self, session: AsyncSession) -> None:
+        self._session = session
         self._orders = OrderService(session)
 
     async def evaluate(
@@ -190,10 +192,9 @@ class OrderPolicyService:
         cancel_reason = None if can_cancel else f"ORDER_STATUS_{order.status.upper()}"
 
         current_time = as_of or datetime.now(UTC)
-        created_at = order.created_at
-        if created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=UTC)
-        within_return_window = current_time - created_at <= timedelta(days=7)
+        within_return_window = await refund_window_is_open(
+            self._session, order, as_of=current_time
+        )
         refundable_status = order.status in {"shipped", "delivered"}
         amount_valid = (
             requested_refund_amount is None or requested_refund_amount <= order.total_amount

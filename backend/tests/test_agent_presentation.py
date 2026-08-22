@@ -78,3 +78,35 @@ def test_final_response_guard_removes_internal_protocol_details() -> None:
     assert "citation" not in response
     assert "#chunk" not in response
     assert "**" not in response
+
+
+def test_action_validation_error_is_explained_in_customer_language() -> None:
+    presented = present_tool_result(
+        "request_refund",
+        {"ok": False, "error": {"code": "RETURN_WINDOW_EXPIRED"}},
+    )
+
+    assert presented.data == {
+        "summary": "该订单已超过可申请退款的时间范围，本次没有创建退款申请。"
+    }
+
+
+def test_existing_cancellation_is_presented_as_waiting_not_newly_created() -> None:
+    presented = present_tool_result(
+        "request_order_cancellation",
+        {
+            "ok": True,
+            "data": {
+                "action_type": "cancel_order",
+                "status": "pending",
+                "request_state": "already_pending",
+                "payload": {"order_number": "AUR-202607-0001"},
+            },
+        },
+    )
+
+    summary = presented.data["summary"]
+    assert "申请已经提交" in summary
+    assert "正在等待人工审批" in summary
+    assert "无需重复申请" in summary
+    assert "已提交订单" not in summary
