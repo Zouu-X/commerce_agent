@@ -1,4 +1,4 @@
-.PHONY: up down logs smoke test lint frontend-install seed reset-demo migrate eval eval-mock eval-retrieval
+.PHONY: up down logs smoke test lint frontend-install seed reindex reset-demo migrate eval eval-mock eval-retrieval
 
 DOCKER ?= docker
 API_URL ?= http://localhost:8000
@@ -29,20 +29,24 @@ migrate:
 
 seed:
 	$(DOCKER) compose exec api python -m app.commerce.seed
+	$(DOCKER) compose exec api python -m app.knowledge.reindex
+
+reindex:
+	$(DOCKER) compose exec api python -m app.knowledge.reindex --force
 
 reset-demo: seed
 
 eval:
 	$(DOCKER) compose build api
-	$(DOCKER) compose run --rm api sh -c "alembic upgrade head && python -m app.commerce.seed && python -m app.evaluations.cli --output-dir /app/eval-results"
+	$(DOCKER) compose run --rm api sh -c "alembic upgrade head && python -m app.commerce.seed && python -m app.knowledge.reindex && python -m app.evaluations.cli --output-dir /app/eval-results"
 
 eval-mock:
 	$(DOCKER) compose build api
-	MODEL_PROVIDER=mock MODEL_NAME=mock-commerce-agent MODEL_INPUT_COST_PER_MILLION=0 MODEL_OUTPUT_COST_PER_MILLION=0 $(DOCKER) compose run --rm api sh -c "alembic upgrade head && python -m app.commerce.seed && python -m app.evaluations.cli --output-dir /app/eval-results"
+	MODEL_PROVIDER=mock MODEL_NAME=mock-commerce-agent MODEL_INPUT_COST_PER_MILLION=0 MODEL_OUTPUT_COST_PER_MILLION=0 $(DOCKER) compose run --rm api sh -c "alembic upgrade head && python -m app.commerce.seed && python -m app.knowledge.reindex && python -m app.evaluations.cli --output-dir /app/eval-results"
 
 eval-retrieval:
 	$(DOCKER) compose build api
-	$(DOCKER) compose run --rm api sh -c "alembic upgrade head && python -m app.commerce.seed && python -m app.evaluations.retrieval_cli --split $(RETRIEVAL_SPLIT) --output-dir /app/eval-results"
+	$(DOCKER) compose run --rm api sh -c "alembic upgrade head && python -m app.commerce.seed && python -m app.knowledge.reindex && python -m app.evaluations.retrieval_cli --split $(RETRIEVAL_SPLIT) --output-dir /app/eval-results"
 
 frontend-install:
 	npm --prefix frontend install

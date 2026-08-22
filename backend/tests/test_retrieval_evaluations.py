@@ -176,4 +176,6 @@ async def test_full_gold_set_runs_through_real_knowledge_service(
     assert run.metrics["ndcg_at_5"] is not None
     assert run.metrics["scope_violation_rate"] == 0
     assert run.metrics["forbidden_source_hit_rate"] == 0
-    assert run.to_payload()["run"]["retrieval"]["embedding_dimensions"] == 64
+    retrieval = run.to_payload()["run"]["retrieval"]
+    assert retrieval["embedding_provider"] == "deterministic_hash"
+    assert retrieval["embedding_dimensions"] == 512

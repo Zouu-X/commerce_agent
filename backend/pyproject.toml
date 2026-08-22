@@ -19,6 +19,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+embedding = [
+  "fastembed>=0.8,<1",
+]
 dev = [
   "aiosqlite>=0.21,<1",
   "anyio>=4.10,<5",
@@ -45,3 +48,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 python_version = "3.12"
 strict = true
 packages = ["app"]
+
+[[tool.mypy.overrides]]
+module = ["fastembed"]
+ignore_missing_imports = true

@@ -11,12 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.commerce.context import CommerceContext
 from app.commerce.seed import stable_id
 from app.evaluations.retrieval_dataset import RetrievalGoldCase
-from app.knowledge.embeddings import EMBEDDING_DIMENSIONS
 from app.knowledge.service import (
     MIN_KEYWORD_RELEVANCE,
-    MIN_RELATIVE_RELEVANCE,
     MIN_VECTOR_KEYWORD_SUPPORT,
-    MIN_VECTOR_SIMILARITY,
     RRF_K,
     KnowledgeSearchHit,
     KnowledgeSearchService,
@@ -24,7 +21,7 @@ from app.knowledge.service import (
 
 DATASET_NAME = "commerce-rag-retrieval"
 DATASET_VERSION = "retrieval-gold-v1"
-RETRIEVAL_CONFIG_VERSION = "hybrid-rrf-v1"
+RETRIEVAL_CONFIG_VERSION = "hybrid-rrf-v2-bge"
 
 
 @dataclass(frozen=True)
@@ -67,6 +64,11 @@ class RetrievalRunResult:
     passed_cases: int
     metrics: dict[str, Any]
     cases: list[RetrievalCaseResult]
+    embedding_provider: str
+    embedding_model: str
+    embedding_dimensions: int
+    min_vector_similarity: float
+    min_relative_relevance: float
 
     def to_payload(self) -> dict[str, Any]:
         return {
@@ -78,17 +80,17 @@ class RetrievalRunResult:
                 "retrieval": {
                     "strategy": "hybrid_rrf",
                     "config_version": self.retrieval_config_version,
-                    "embedding_provider": "deterministic_hash",
-                    "embedding_model": "blake2b-lexical-features-v1",
-                    "embedding_dimensions": EMBEDDING_DIMENSIONS,
+                    "embedding_provider": self.embedding_provider,
+                    "embedding_model": self.embedding_model,
+                    "embedding_dimensions": self.embedding_dimensions,
                     "rrf_k": RRF_K,
                     "keyword_weight": 2.0,
                     "vector_weight": 1.0,
                     "thresholds": {
                         "min_keyword_relevance": MIN_KEYWORD_RELEVANCE,
-                        "min_vector_similarity": MIN_VECTOR_SIMILARITY,
+                        "min_vector_similarity": self.min_vector_similarity,
                         "min_vector_keyword_support": MIN_VECTOR_KEYWORD_SUPPORT,
-                        "min_relative_relevance": MIN_RELATIVE_RELEVANCE,
+                        "min_relative_relevance": self.min_relative_relevance,
                     },
                 },
                 "total_cases": self.total_cases,
@@ -134,6 +136,11 @@ class RetrievalEvaluationService:
             passed_cases=sum(result.passed for result in results),
             metrics=calculate_retrieval_metrics(results),
             cases=results,
+            embedding_provider=self._service.embedding_provider.provider_name,
+            embedding_model=self._service.embedding_provider.model_name,
+            embedding_dimensions=self._service.embedding_provider.dimensions,
+            min_vector_similarity=self._service.min_vector_similarity,
+            min_relative_relevance=self._service.min_relative_relevance,
         )
 
 

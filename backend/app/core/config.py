@@ -1,6 +1,7 @@
 from decimal import Decimal
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -17,6 +18,12 @@ class Settings(BaseSettings):
     model_input_cost_per_million: Decimal = Field(default=Decimal("0.14"), ge=0)
     model_output_cost_per_million: Decimal = Field(default=Decimal("0.28"), ge=0)
     model_timeout_seconds: float = Field(default=30.0, gt=0)
+    embedding_provider: Literal["fastembed", "hash"] = "fastembed"
+    embedding_model: str = "BAAI/bge-small-zh-v1.5"
+    embedding_cache_dir: str | None = None
+    embedding_threads: int | None = Field(default=None, ge=1)
+    embedding_min_vector_similarity: float = Field(default=0.65, ge=-1, le=1)
+    embedding_min_relative_relevance: float = Field(default=0.95, gt=0, le=1)
     agent_total_timeout_seconds: float = Field(default=45.0, gt=0)
     agent_tool_timeout_seconds: float = Field(default=10.0, gt=0)
     agent_max_model_loops: int = Field(default=6, ge=1, le=20)

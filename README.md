@@ -24,8 +24,9 @@ make up
 make smoke
 ```
 
-`make up` 会在后台构建并启动数据库、API 和 Web，并等待服务健康。首次构建需要下载镜像和
-Python/npm 依赖，通常在数分钟内完成；后续启动会复用缓存。
+`make up` 会在后台构建并启动数据库、API 和 Web，并等待服务健康。首次构建需要下载镜像、
+Python/npm 依赖和约 90MB 的 BGE ONNX 模型，通常在数分钟内完成；模型保存在
+Docker named volume，后续启动会复用缓存。
 
 启动后访问：
 
@@ -179,9 +180,17 @@ Milestone 3 将店铺政策和商品指南存入 PostgreSQL，并使用两条召
 已经过期的政策不会进入候选集。内部检索结果会返回文档版本和 `citation_id`，供 Trace 和评测
 核验；客户对话只展示资料标题和版本，不暴露切片 ID。
 
-当前 Demo 使用 64 维确定性本地特征向量，不需要外部 Embedding API Key，便于 CI 和招聘方
-重复运行。它用于展示完整 pgvector/RRF 架构，不等同于生产级语义模型；生产环境可以在不改
-检索接口的情况下替换为真实 embedding provider。
+运行时默认使用 `BAAI/bge-small-zh-v1.5`：一个中文专用、24M 参数、512 维的真实
+Embedding 模型。FastEmbed 通过 ONNX Runtime 在 CPU 本地执行，不需要 API Key。query 和
+document 使用模型各自的非对称编码入口，向量在重建时记录 provider、model 和 dimensions；
+检索遇到不匹配的旧向量会忽略语义通道，防止静默混用不同模型的向量空间。
+
+确定性 Hash provider 仍作为快速、离线的单元测试 test double，但不再是 Demo 运行时默认值。
+更换 Embedding 模型或导入新知识后，可显式重建：
+
+```bash
+make reindex
+```
 
 直接检索当前店铺政策：
 
@@ -334,6 +343,18 @@ Recall@1/3/5、Precision@3、MRR、nDCG@5、无答案误召回率、hard-negativ
 命中率和 scope 泄漏率。每份报告同时记录检索配置、Embedding 实现和数据集版本，后续可以对
 关键词检索、当前哈希向量、真实 Embedding 和 reranker 做同集 A/B。全量报告还会分别汇总 dev
 和 holdout，并为失败用例保存命中分数、缺失来源和明确失败原因。
+
+2026-08-22 在本地 Docker PostgreSQL + pgvector 上的同集 A/B：
+
+| 检索配置（100 条） | 通过 | Recall@3 | MRR | nDCG@5 | No-answer | Hard-negative 命中 |
+|---|---:|---:|---:|---:|---:|---:|
+| Hash test double 基线 | 83% | 91.40% | 94.09% | 92.11% | 85.71% | 6.17% |
+| BGE-small-zh + 关键词 + RRF | 88% | 91.40% | 94.09% | 92.11% | 100% | 1.23% |
+
+这组结果表明：在当前只有 28 个短切片的语料上，真实 Embedding 的主要价值是减少无答案误召回和
+相似但错误的政策命中，而非显著提高已被关键词通道主导的排序指标。纯向量对照在 dev/holdout 仅有
+57.33%/60.00% 通过率，所以保留关键词精确匹配和 RRF，并只用 dev 校准 0.65 绝对阈值与 0.95
+相对阈值；冻结的 holdout 通过率为 92%。
 
 评测 API：
 

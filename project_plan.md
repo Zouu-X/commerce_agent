@@ -774,6 +774,26 @@ commerce-support-agent/
 
 **验收标准：** 没有项目背景的评审者能在 10 分钟内启动项目并理解其核心价值。
 
+### 里程碑 7：Retrieval Gold Set
+
+- [x] 建立 100 条人工可审查的 query-to-source 相关性标注；
+- [x] 固定 75 条 dev 与 25 条 holdout；
+- [x] 实现 Recall、MRR、nDCG、no-answer、hard-negative 和 scope 指标；
+- [x] 保存失败用例的命中、缺失来源和配置元数据。
+
+**验收标准：** 一条命令可独立评测 RAG 检索，不受 Agent 路由和生成模型影响。
+
+### 里程碑 8：本地真实 Embedding
+
+- [x] 调查面向中文小型项目的本地 Embedding 模型与运行时；
+- [x] 接入 `BAAI/bge-small-zh-v1.5` + FastEmbed/ONNX CPU Provider；
+- [x] 将 Hash 实现降级为测试专用 test double；
+- [x] 升级到 `vector(512)` 并实现可幂等 reindex 与模型元数据校验；
+- [x] 用 Gold Set 完成纯向量、Hash Hybrid 和 BGE Hybrid 对照。
+
+**验收标准：** Docker 冷启动能自动准备本地模型与向量；真实 PostgreSQL
+Gold Set 报告显式记录 provider/model/dimensions，并给出相对 Hash 基线的可量化改变。
+
 ---
 
 ## 17. MVP 完成定义

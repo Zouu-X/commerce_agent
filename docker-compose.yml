@@ -28,6 +28,12 @@ services:
       MODEL_API_KEY_FILE: ${MODEL_API_KEY_FILE:-/run/secrets/deepseek_api_key}
       MODEL_INPUT_COST_PER_MILLION: ${MODEL_INPUT_COST_PER_MILLION:-0.14}
       MODEL_OUTPUT_COST_PER_MILLION: ${MODEL_OUTPUT_COST_PER_MILLION:-0.28}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-fastembed}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-small-zh-v1.5}
+      EMBEDDING_CACHE_DIR: ${EMBEDDING_CACHE_DIR:-/models/fastembed}
+      EMBEDDING_THREADS: ${EMBEDDING_THREADS:-2}
+      EMBEDDING_MIN_VECTOR_SIMILARITY: ${EMBEDDING_MIN_VECTOR_SIMILARITY:-0.65}
+      EMBEDDING_MIN_RELATIVE_RELEVANCE: ${EMBEDDING_MIN_RELATIVE_RELEVANCE:-0.95}
     secrets:
       - deepseek_api_key
     depends_on:
@@ -44,11 +50,12 @@ services:
       interval: 5s
       timeout: 3s
       retries: 12
-      start_period: 10s
+      start_period: 30s
     ports:
       - "8000:8000"
     volumes:
       - ./eval-results:/app/eval-results
+      - embedding_cache:/models/fastembed
 
   web:
     build:
@@ -66,6 +73,7 @@ services:
 
 volumes:
   postgres_data:
+  embedding_cache:
 
 secrets:
   deepseek_api_key:

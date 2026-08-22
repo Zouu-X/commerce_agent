@@ -11,7 +11,11 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionFactory
-from app.knowledge.embeddings import embed_text, search_document
+from app.knowledge.embeddings import (
+    DeterministicHashEmbeddingProvider,
+    EmbeddingProvider,
+    search_document,
+)
 from app.models import (
     ActionAuditLog,
     AfterSale,
@@ -291,7 +295,10 @@ def _chunk_text(content: str, *, max_chars: int = 280, overlap: int = 40) -> lis
     return chunks
 
 
-def build_knowledge_objects() -> tuple[list[object], dict[str, int]]:
+def build_knowledge_objects(
+    *, provider: EmbeddingProvider | None = None
+) -> tuple[list[object], dict[str, int]]:
+    embedding_provider = provider or DeterministicHashEmbeddingProvider()
     objects: list[object] = []
     counts = {"knowledge_documents": 0, "knowledge_chunks": 0}
     store_specs = (
@@ -454,11 +461,14 @@ def build_knowledge_objects() -> tuple[list[object], dict[str, int]]:
                         chunk_index=chunk_index,
                         content=chunk,
                         search_tokens=search_document(embedding_input),
-                        embedding=embed_text(embedding_input),
+                        embedding=embedding_provider.embed_documents([embedding_input])[0],
                         metadata_json={
                             "document_type": document_type,
                             "source_key": source_key,
                             "store_name": store_name,
+                            "embedding_provider": embedding_provider.provider_name,
+                            "embedding_model": embedding_provider.model_name,
+                            "embedding_dimensions": embedding_provider.dimensions,
                         },
                     )
                 )

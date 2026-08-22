@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import math
 import uuid
 from dataclasses import dataclass
@@ -10,14 +11,21 @@ from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.commerce.context import CommerceContext
-from app.knowledge.embeddings import embed_text, lexical_tokens
+from app.core.config import get_settings
+from app.knowledge.embeddings import (
+    EmbeddingProvider,
+    get_embedding_provider,
+    lexical_tokens,
+)
 from app.models import KnowledgeChunk, KnowledgeDocument
 
 RRF_K = 60
 MIN_KEYWORD_RELEVANCE = 0.12
-MIN_VECTOR_SIMILARITY = 0.35
+MIN_VECTOR_SIMILARITY = 0.65
 MIN_VECTOR_KEYWORD_SUPPORT = 0.05
-MIN_RELATIVE_RELEVANCE = 0.9
+MIN_RELATIVE_RELEVANCE = 0.95
+HASH_MIN_VECTOR_SIMILARITY = 0.35
+HASH_MIN_RELATIVE_RELEVANCE = 0.9
 
 
 @dataclass(frozen=True)
@@ -33,8 +41,21 @@ class KnowledgeSearchHit:
 
 
 class KnowledgeSearchService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        embedding_provider: EmbeddingProvider | None = None,
+    ) -> None:
         self._session = session
+        self.embedding_provider = embedding_provider or get_embedding_provider()
+        settings = get_settings()
+        if self.embedding_provider.provider_name == "deterministic_hash":
+            self.min_vector_similarity = HASH_MIN_VECTOR_SIMILARITY
+            self.min_relative_relevance = HASH_MIN_RELATIVE_RELEVANCE
+        else:
+            self.min_vector_similarity = settings.embedding_min_vector_similarity
+            self.min_relative_relevance = settings.embedding_min_relative_relevance
 
     async def search(
         self,
@@ -50,10 +71,14 @@ class KnowledgeSearchService:
             return []
         effective_at = as_of or datetime.now(UTC)
         candidate_limit = max(20, limit * 4)
+        query_embedding = await asyncio.to_thread(
+            self.embedding_provider.embed_query, normalized_query
+        )
         if self._session.bind is not None and self._session.bind.dialect.name == "postgresql":
             ranked_ids = await self._postgres_rankings(
                 context,
                 normalized_query,
+                query_embedding,
                 document_type=document_type,
                 as_of=effective_at,
                 candidate_limit=candidate_limit,
@@ -62,6 +87,7 @@ class KnowledgeSearchService:
             ranked_ids = await self._python_rankings(
                 context,
                 normalized_query,
+                query_embedding,
                 document_type=document_type,
                 as_of=effective_at,
                 candidate_limit=candidate_limit,
@@ -82,7 +108,6 @@ class KnowledgeSearchService:
         ).all()
         by_id = {str(chunk.id): (chunk, document) for chunk, document in rows}
         query_tokens = set(lexical_tokens(normalized_query))
-        query_embedding = embed_text(normalized_query)
         relevance_by_id = {
             chunk_id: self._absolute_relevance(
                 query_tokens,
@@ -143,8 +168,8 @@ class KnowledgeSearchService:
                 break
         return hits
 
-    @staticmethod
     def _absolute_relevance(
+        self,
         query_tokens: set[str],
         query_embedding: list[float],
         chunk: KnowledgeChunk,
@@ -170,14 +195,27 @@ class KnowledgeSearchService:
             keyword_relevance = weighted_overlap / math.sqrt(
                 len(query_tokens) * len(document_tokens)
             )
-        vector_similarity = sum(
-            left * right
-            for left, right in zip(query_embedding, chunk.embedding, strict=True)
-        )
+        vector_similarity = 0.0
+        if self._embedding_is_current(chunk):
+            assert chunk.embedding is not None
+            vector_similarity = sum(
+                left * right
+                for left, right in zip(query_embedding, chunk.embedding, strict=True)
+            )
         return keyword_relevance, vector_similarity, has_concept_match, concept_coverage
 
-    @staticmethod
+    def _embedding_is_current(self, chunk: KnowledgeChunk) -> bool:
+        return (
+            chunk.embedding is not None
+            and len(chunk.embedding) == self.embedding_provider.dimensions
+            and chunk.metadata_json.get("embedding_provider")
+            == self.embedding_provider.provider_name
+            and chunk.metadata_json.get("embedding_model")
+            == self.embedding_provider.model_name
+        )
+
     def _passes_relevance_gate(
+        self,
         keyword_relevance: float,
         vector_similarity: float,
         *,
@@ -188,21 +226,21 @@ class KnowledgeSearchService:
         best_concept_coverage: float,
     ) -> bool:
         concept_is_competitive = best_concept_coverage == 0.0 or concept_coverage >= (
-            best_concept_coverage * MIN_RELATIVE_RELEVANCE
+            best_concept_coverage * self.min_relative_relevance
         )
         if not concept_is_competitive:
             return False
         keyword_is_competitive = keyword_relevance >= (
-            best_keyword_relevance * MIN_RELATIVE_RELEVANCE
+            best_keyword_relevance * self.min_relative_relevance
         )
         if keyword_is_competitive and (
             has_concept_match or keyword_relevance >= MIN_KEYWORD_RELEVANCE
         ):
             return True
         return (
-            vector_similarity >= MIN_VECTOR_SIMILARITY
+            vector_similarity >= self.min_vector_similarity
             and vector_similarity
-            >= best_vector_similarity * MIN_RELATIVE_RELEVANCE
+            >= best_vector_similarity * self.min_relative_relevance
             and keyword_relevance >= MIN_VECTOR_KEYWORD_SUPPORT
         )
 
@@ -232,6 +270,7 @@ class KnowledgeSearchService:
         self,
         context: CommerceContext,
         query: str,
+        query_embedding: list[float],
         *,
         document_type: str | None,
         as_of: datetime,
@@ -256,7 +295,6 @@ class KnowledgeSearchService:
             )
         ).all()
 
-        query_embedding = embed_text(query)
         distance = cast(Any, KnowledgeChunk.embedding).cosine_distance(query_embedding)
         vector_statement = self._scope(
             select(KnowledgeChunk.id, distance.label("distance")).join(
@@ -265,7 +303,14 @@ class KnowledgeSearchService:
             context,
             document_type=document_type,
             as_of=as_of,
-        ).where(distance < 0.9)
+        ).where(
+            KnowledgeChunk.embedding.is_not(None),
+            KnowledgeChunk.metadata_json["embedding_provider"].as_string()
+            == self.embedding_provider.provider_name,
+            KnowledgeChunk.metadata_json["embedding_model"].as_string()
+            == self.embedding_provider.model_name,
+            distance < 0.9,
+        )
         vector_rows = (
             await self._session.execute(
                 vector_statement.order_by(distance).limit(candidate_limit)
@@ -280,6 +325,7 @@ class KnowledgeSearchService:
         self,
         context: CommerceContext,
         query: str,
+        query_embedding: list[float],
         *,
         document_type: str | None,
         as_of: datetime,
@@ -295,7 +341,6 @@ class KnowledgeSearchService:
         )
         rows = (await self._session.execute(statement)).all()
         query_tokens = set(lexical_tokens(query))
-        query_embedding = embed_text(query)
         keyword_scores: list[tuple[str, float]] = []
         vector_scores: list[tuple[str, float]] = []
         for chunk, _document in rows:
@@ -309,7 +354,7 @@ class KnowledgeSearchService:
             )
             if keyword_relevance > 0:
                 keyword_scores.append((str(chunk.id), keyword_relevance))
-            if vector_similarity > 0.1:
+            if self._embedding_is_current(chunk) and vector_similarity > 0.1:
                 vector_scores.append((str(chunk.id), vector_similarity))
         keyword_scores.sort(key=lambda item: item[1], reverse=True)
         vector_scores.sort(key=lambda item: item[1], reverse=True)

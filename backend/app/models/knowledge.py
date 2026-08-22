@@ -86,8 +86,8 @@ class KnowledgeChunk(Base):
     chunk_index: Mapped[int] = mapped_column()
     content: Mapped[str] = mapped_column(Text)
     search_tokens: Mapped[str] = mapped_column(Text)
-    embedding: Mapped[list[float]] = mapped_column(
-        VECTOR(EMBEDDING_DIMENSIONS).with_variant(JSON(), "sqlite")
+    embedding: Mapped[list[float] | None] = mapped_column(
+        VECTOR(EMBEDDING_DIMENSIONS).with_variant(JSON(), "sqlite"), nullable=True
     )
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
