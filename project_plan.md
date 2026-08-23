@@ -794,6 +794,18 @@ commerce-support-agent/
 **验收标准：** Docker 冷启动能自动准备本地模型与向量；真实 PostgreSQL
 Gold Set 报告显式记录 provider/model/dimensions，并给出相对 Hash 基线的可量化改变。
 
+### 里程碑 9：可解释 Query Decomposition
+
+- [x] 为电商知识域实现确定性、最多 3 路的复合意图规划器；
+- [x] 为每个子问题独立执行混合检索及原有 scope/版本/相关性过滤；
+- [x] 用覆盖优先的 round-robin 合并保证每个子问题的首条证据，并按引用去重；
+- [x] 在 API、工具 Trace 和评测报告中暴露拆分原因、命中意图和未解决子问题；
+- [x] 为 7 条复合 Gold case 增加预期意图标注和专门指标；
+- [x] 用真实 PostgreSQL + BGE 完成前后 A/B，并记录未通过的全量质量门。
+
+**验收标准：** 7 条已标注复合问题全部正确拆分并覆盖每个意图，非复合问题误拆分率为 0；
+单意图查询保持向后兼容，拆分过程可在 API、Trace 和 Gold Set 报告中解释。
+
 ---
 
 ## 17. MVP 完成定义

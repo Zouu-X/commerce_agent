@@ -29,7 +29,7 @@ class KnowledgeToolHandlers:
 
     async def search_store_policy(self, raw_args: BaseModel) -> dict[str, Any]:
         args = cast(SearchStorePolicyArgs, raw_args)
-        hits = await self._service.search(
+        result = await self._service.search_with_explanation(
             self._context,
             args.query,
             document_type=args.document_type,
@@ -45,7 +45,28 @@ class KnowledgeToolHandlers:
                 "content": hit.content,
                 "score": hit.score,
                 "effective_from": hit.effective_from.isoformat(),
+                "matched_subquery_ids": list(hit.matched_subquery_ids),
+                "matched_intents": list(hit.matched_intents),
             }
-            for hit in hits
+            for hit in result.hits
         ]
-        return {"query": args.query, "citations": citations, "count": len(citations)}
+        return {
+            "query": args.query,
+            "citations": citations,
+            "count": len(citations),
+            "decomposition": {
+                "decomposed": result.decomposition.decomposed,
+                "reason": result.decomposition.reason,
+                "subqueries": [
+                    {
+                        "subquery_id": subquery.subquery_id,
+                        "intent": subquery.intent,
+                        "intent_label": subquery.intent_label,
+                        "query": subquery.query,
+                        "document_type": subquery.document_type,
+                    }
+                    for subquery in result.decomposition.subqueries
+                ],
+                "unresolved_subquery_ids": list(result.unresolved_subquery_ids),
+            },
+        }

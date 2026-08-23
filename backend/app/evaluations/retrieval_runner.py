@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.commerce.context import CommerceContext
 from app.commerce.seed import stable_id
 from app.evaluations.retrieval_dataset import RetrievalGoldCase
+from app.knowledge.decomposition import QueryDecomposition
 from app.knowledge.service import (
     MIN_KEYWORD_RELEVANCE,
     MIN_VECTOR_KEYWORD_SUPPORT,
@@ -20,8 +21,8 @@ from app.knowledge.service import (
 )
 
 DATASET_NAME = "commerce-rag-retrieval"
-DATASET_VERSION = "retrieval-gold-v1"
-RETRIEVAL_CONFIG_VERSION = "hybrid-rrf-v2-bge"
+DATASET_VERSION = "retrieval-gold-v1.1-intents"
+RETRIEVAL_CONFIG_VERSION = "hybrid-rrf-v3-query-decomposition"
 
 
 @dataclass(frozen=True)
@@ -30,6 +31,16 @@ class RetrievalCaseResult:
     split: str
     query: str
     tenant_key: str
+    decomposed: bool
+    decomposition_reason: str
+    subqueries: list[dict[str, Any]]
+    unresolved_subquery_ids: list[str]
+    expected_intents: list[str]
+    retrieved_intents: list[str]
+    missing_intents: list[str]
+    unexpected_intents: list[str]
+    intent_recall: float | None
+    intent_precision: float | None
     latency_ms: int
     retrieved_citations: list[str]
     retrieved_sources: list[str]
@@ -92,6 +103,11 @@ class RetrievalRunResult:
                         "min_vector_keyword_support": MIN_VECTOR_KEYWORD_SUPPORT,
                         "min_relative_relevance": self.min_relative_relevance,
                     },
+                    "query_decomposition": {
+                        "strategy": "deterministic_commerce_intent_planner",
+                        "max_subqueries": 3,
+                        "merge": "round_robin_with_per_subquery_top_1_guarantee",
+                    },
                 },
                 "total_cases": self.total_cases,
                 "passed_cases": self.passed_cases,
@@ -116,7 +132,7 @@ class RetrievalEvaluationService:
                 customer_id=stable_id(f"customer:{case.tenant_key}:0"),
             )
             started = perf_counter()
-            hits = await self._service.search(
+            search_result = await self._service.search_with_explanation(
                 context,
                 case.query,
                 document_type=case.document_type,
@@ -124,7 +140,15 @@ class RetrievalEvaluationService:
                 as_of=case.as_of,
             )
             latency_ms = max(0, round((perf_counter() - started) * 1000))
-            results.append(evaluate_retrieval_case(case, hits, latency_ms=latency_ms))
+            results.append(
+                evaluate_retrieval_case(
+                    case,
+                    search_result.hits,
+                    latency_ms=latency_ms,
+                    decomposition=search_result.decomposition,
+                    unresolved_subquery_ids=search_result.unresolved_subquery_ids,
+                )
+            )
         completed_at = datetime.now(UTC)
         return RetrievalRunResult(
             started_at=started_at,
@@ -149,10 +173,30 @@ def evaluate_retrieval_case(
     hits: list[KnowledgeSearchHit],
     *,
     latency_ms: int,
+    decomposition: QueryDecomposition | None = None,
+    unresolved_subquery_ids: tuple[str, ...] = (),
 ) -> RetrievalCaseResult:
     retrieved_citations = [hit.citation_id for hit in hits]
     retrieved_sources = _unique([_source_version(hit.citation_id) for hit in hits])
     retrieved_scores = {hit.citation_id: hit.score for hit in hits}
+    retrieved_intents = (
+        [subquery.intent for subquery in decomposition.subqueries]
+        if decomposition is not None and decomposition.decomposed
+        else []
+    )
+    expected_intents = set(case.expected_intents)
+    missing_intents = sorted(expected_intents - set(retrieved_intents))
+    unexpected_intents = sorted(set(retrieved_intents) - expected_intents)
+    intent_recall = (
+        len(expected_intents & set(retrieved_intents)) / len(expected_intents)
+        if expected_intents
+        else None
+    )
+    intent_precision = (
+        len(expected_intents & set(retrieved_intents)) / len(retrieved_intents)
+        if expected_intents and retrieved_intents
+        else (0.0 if expected_intents else None)
+    )
     relevant_sources = set(case.relevance)
     missing_sources = sorted(relevant_sources - set(retrieved_sources[:3]))
     negative_hits = sorted(set(case.negative_sources) & set(retrieved_sources))
@@ -208,12 +252,34 @@ def evaluate_retrieval_case(
         failures.append("scope_violation")
     if not content_requirements_met:
         failures.append("content_requirement_missing")
+    if missing_intents:
+        failures.append("missing_decomposition_intent")
+    if unexpected_intents:
+        failures.append("unexpected_decomposition_intent")
+    if not case.expected_intents and decomposition is not None and decomposition.decomposed:
+        failures.append("unexpected_decomposition")
+    if missing_intents or unexpected_intents or "unexpected_decomposition" in failures:
+        passed = False
 
     return RetrievalCaseResult(
         case_id=case.case_id,
         split=case.split,
         query=case.query,
         tenant_key=case.tenant_key,
+        decomposed=decomposition.decomposed if decomposition is not None else False,
+        decomposition_reason=decomposition.reason if decomposition is not None else "",
+        subqueries=(
+            [asdict(subquery) for subquery in decomposition.subqueries]
+            if decomposition is not None
+            else []
+        ),
+        unresolved_subquery_ids=list(unresolved_subquery_ids),
+        expected_intents=case.expected_intents,
+        retrieved_intents=retrieved_intents,
+        missing_intents=missing_intents,
+        unexpected_intents=unexpected_intents,
+        intent_recall=intent_recall,
+        intent_precision=intent_precision,
         latency_ms=latency_ms,
         retrieved_citations=retrieved_citations,
         retrieved_sources=retrieved_sources,
@@ -244,6 +310,14 @@ def calculate_retrieval_metrics(
     answerable = [result for result in results if result.recall_at_1 is not None]
     no_answer = [result for result in results if result.no_answer_correct is not None]
     hard_negative = [result for result in results if "hard_negative" in result.tags]
+    multi_intent = [result for result in results if "multi_intent" in result.tags]
+    non_multi_intent = [result for result in results if "multi_intent" not in result.tags]
+    decomposed = [result for result in results if result.decomposed]
+    judged_intents = [result for result in results if result.intent_recall is not None]
+    subquery_count = sum(len(result.subqueries) for result in decomposed)
+    unresolved_subquery_count = sum(
+        len(result.unresolved_subquery_ids) for result in decomposed
+    )
     latencies = sorted(result.latency_ms for result in results)
     p95_index = max(0, math.ceil(len(latencies) * 0.95) - 1)
 
@@ -263,6 +337,20 @@ def calculate_retrieval_metrics(
         ),
         "hard_negative_case_hit_rate": _ratio(
             sum(bool(result.negative_hits) for result in hard_negative), len(hard_negative)
+        ),
+        "decomposition_rate": _ratio(len(decomposed), len(results)),
+        "multi_intent_decomposition_rate": _ratio(
+            sum(result.decomposed for result in multi_intent), len(multi_intent)
+        ),
+        "non_multi_intent_decomposition_rate": _ratio(
+            sum(result.decomposed for result in non_multi_intent), len(non_multi_intent)
+        ),
+        "subquery_resolution_rate": _ratio(
+            subquery_count - unresolved_subquery_count, subquery_count
+        ),
+        "decomposition_intent_recall": _mean_metric(judged_intents, "intent_recall"),
+        "decomposition_intent_precision": _mean_metric(
+            judged_intents, "intent_precision"
         ),
         "forbidden_source_hit_rate": _ratio(
             sum(bool(result.forbidden_hits) for result in results), len(results)
@@ -290,7 +378,24 @@ def calculate_retrieval_metrics(
         ),
         "forbidden_source_hit_rate_eq_0": metrics["forbidden_source_hit_rate"] == 0,
         "scope_violation_rate_eq_0": metrics["scope_violation_rate"] == 0,
+        "non_multi_intent_decomposition_rate_eq_0": (
+            metrics["non_multi_intent_decomposition_rate"] == 0
+        ),
     }
+    if multi_intent:
+        metrics["targets"].update(
+            {
+                "decomposition_intent_recall_eq_1": (
+                    metrics["decomposition_intent_recall"] == 1
+                ),
+                "decomposition_intent_precision_eq_1": (
+                    metrics["decomposition_intent_precision"] == 1
+                ),
+                "subquery_resolution_rate_gte_0_90": _meets(
+                    metrics["subquery_resolution_rate"], 0.90
+                ),
+            }
+        )
     metrics["quality_gate_passed"] = all(metrics["targets"].values())
     if include_splits:
         split_names = sorted({result.split for result in results})

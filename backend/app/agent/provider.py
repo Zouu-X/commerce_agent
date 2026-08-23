@@ -317,12 +317,40 @@ class MockCommerceProvider:
     @classmethod
     def _knowledge_call(cls, call_id: str, user_text: str) -> ModelResponse:
         arguments: dict[str, Any] = {"query": user_text, "limit": 3}
+        candidate_types: set[str] = set()
         if any(word in user_text for word in ("保养", "清洁", "使用说明")):
-            arguments["document_type"] = "product_guide"
-        elif "忽略系统指令" in user_text:
-            arguments["document_type"] = "security_guide"
-        else:
-            arguments["document_type"] = "policy"
+            candidate_types.add("product_guide")
+        if any(
+            word in user_text
+            for word in ("忽略系统指令", "越权指令", "不可信文本", "泄露其他顾客")
+        ):
+            candidate_types.add("security_guide")
+        if any(
+            word in user_text
+            for word in (
+                "无理由",
+                "退货",
+                "退款",
+                "到账",
+                "发货",
+                "物流",
+                "配送",
+                "保价",
+                "价保",
+                "降价",
+                "差价",
+                "补偿",
+                "换货",
+                "取消",
+                "质保",
+                "保修",
+            )
+        ):
+            candidate_types.add("policy")
+        # A single-domain query can keep the cheap pre-filter. Mixed-domain queries
+        # stay unrestricted so QueryDecomposer can assign each subquery its own type.
+        if len(candidate_types) == 1:
+            arguments["document_type"] = candidate_types.pop()
         return cls._call(call_id, "search_store_policy", arguments)
 
     @staticmethod
@@ -401,7 +429,7 @@ class MockCommerceProvider:
             if any("忽略系统指令" in item.get("content", "") for item in citations):
                 citation = citations[0]["citation_id"]
                 return f"检索内容含有指令性文本，已按不可信资料处理，不会执行。[{citation}]"
-            evidence = citations[:2]
+            evidence = citations[:3]
             return "；".join(
                 f"{item['content']} [{item['citation_id']}]" for item in evidence
             )
@@ -449,8 +477,20 @@ class MockCommerceProvider:
                 return summary
             if any("忽略系统指令" in str(item.get("content", "")) for item in sources):
                 return "检索资料含有指令性文本，已按不可信资料处理，不会执行。"
-            return "；".join(
+            rendered = "；".join(
                 f"根据《{item.get('title', '店铺政策')}》：{item.get('content', '')}"
-                for item in sources[:2]
+                for item in sources
             )
+            coverage = data.get("coverage")
+            unresolved = (
+                coverage.get("unresolved", [])
+                if isinstance(coverage, dict)
+                else []
+            )
+            if unresolved:
+                return (
+                    f"{rendered}；关于{'、'.join(str(item) for item in unresolved)}，"
+                    "当前有效知识中没有足够证据，建议转人工确认。"
+                )
+            return rendered
         return summary

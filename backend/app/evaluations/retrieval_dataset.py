@@ -20,6 +20,7 @@ class RetrievalGoldCase(BaseModel):
     document_type: Literal["policy", "product_guide", "security_guide"] | None = None
     as_of: datetime | None = None
     relevance: dict[str, int] = Field(default_factory=dict)
+    expected_intents: list[str] = Field(default_factory=list)
     negative_sources: list[str] = Field(default_factory=list)
     forbidden_sources: list[str] = Field(default_factory=list)
     must_contain: list[str] = Field(default_factory=list)
@@ -41,6 +42,12 @@ class RetrievalGoldCase(BaseModel):
             raise ValueError("cases without relevant sources require the no_answer tag")
         if self.relevance and "no_answer" in self.tags:
             raise ValueError("no_answer cases cannot contain relevant sources")
+        if "multi_intent" in self.tags and len(self.expected_intents) < 2:
+            raise ValueError("multi_intent cases require at least two expected intents")
+        if "multi_intent" not in self.tags and self.expected_intents:
+            raise ValueError("expected intents are reserved for multi_intent cases")
+        if len(self.expected_intents) != len(set(self.expected_intents)):
+            raise ValueError("expected intents must be unique")
         return self
 
 

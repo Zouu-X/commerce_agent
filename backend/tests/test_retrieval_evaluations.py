@@ -36,7 +36,10 @@ def test_retrieval_gold_set_is_versioned_unique_and_broad() -> None:
     assert sum(case.split == "holdout" for case in cases) == 25
     assert sum("no_answer" in case.tags for case in cases) == 7
     assert sum("hard_negative" in case.tags for case in cases) >= 60
-    assert any("multi_intent" in case.tags for case in cases)
+    multi_intent = [case for case in cases if "multi_intent" in case.tags]
+    assert len(multi_intent) == 7
+    assert all(len(case.expected_intents) == 2 for case in multi_intent)
+    assert all(not case.expected_intents for case in cases if case not in multi_intent)
     assert any("historical" in case.tags for case in cases)
     assert any("prompt_injection" in case.tags for case in cases)
     assert any(case.tenant_key == "harbor" for case in cases)
@@ -176,6 +179,12 @@ async def test_full_gold_set_runs_through_real_knowledge_service(
     assert run.metrics["ndcg_at_5"] is not None
     assert run.metrics["scope_violation_rate"] == 0
     assert run.metrics["forbidden_source_hit_rate"] == 0
+    assert run.metrics["decomposition_intent_recall"] == 1
+    assert run.metrics["decomposition_intent_precision"] == 1
+    assert run.metrics["multi_intent_decomposition_rate"] == 1
+    assert run.metrics["non_multi_intent_decomposition_rate"] == 0
+    assert run.metrics["subquery_resolution_rate"] == 1
     retrieval = run.to_payload()["run"]["retrieval"]
     assert retrieval["embedding_provider"] == "deterministic_hash"
     assert retrieval["embedding_dimensions"] == 512
+    assert retrieval["query_decomposition"]["max_subqueries"] == 3

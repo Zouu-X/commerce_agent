@@ -123,3 +123,60 @@ async def test_order_number_shipping_policy_query_excludes_cancellation_policy(
     )
 
     assert [hit.citation_id for hit in hits] == ["shipping-time:v1#chunk-1"]
+
+
+async def test_multi_intent_search_guarantees_evidence_from_each_subquery(
+    db_session: AsyncSession,
+) -> None:
+    result = await KnowledgeSearchService(db_session).search_with_explanation(
+        context("harbor"),
+        "正常发货要多久，严重延迟又能补偿多少？",
+        document_type="policy",
+        limit=3,
+    )
+
+    assert result.decomposition.decomposed is True
+    assert [subquery.intent for subquery in result.decomposition.subqueries] == [
+        "shipping_time",
+        "delay_compensation",
+    ]
+    assert [hit.citation_id for hit in result.hits] == [
+        "shipping-time:v1#chunk-1",
+        "delay-compensation:v1#chunk-1",
+    ]
+    assert [hit.matched_intents for hit in result.hits] == [
+        ("shipping_time",),
+        ("delay_compensation",),
+    ]
+    assert result.unresolved_subquery_ids == ()
+
+
+async def test_decomposition_can_retrieve_across_document_types(
+    db_session: AsyncSession,
+) -> None:
+    result = await KnowledgeSearchService(db_session).search_with_explanation(
+        context("aurora"),
+        "耳机的质保范围和日常清洁方法都说一下",
+        limit=3,
+    )
+
+    assert [hit.citation_id for hit in result.hits] == [
+        "warranty:v1#chunk-1",
+        "product-care:v1#chunk-1",
+    ]
+    assert {hit.document_type for hit in result.hits} == {"policy", "product_guide"}
+
+
+async def test_negated_intent_is_removed_from_atomic_retrieval_query(
+    db_session: AsyncSession,
+) -> None:
+    result = await KnowledgeSearchService(db_session).search_with_explanation(
+        context("aurora"),
+        "不用取消订单，只想知道退款审核通过后多久到账？",
+        document_type="policy",
+        limit=3,
+    )
+
+    assert result.decomposition.decomposed is False
+    assert "取消订单" not in result.decomposition.subqueries[0].query
+    assert [hit.citation_id for hit in result.hits] == ["refund-timing:v1#chunk-1"]

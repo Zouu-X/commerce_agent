@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import math
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Any, cast
 
@@ -12,6 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.commerce.context import CommerceContext
 from app.core.config import get_settings
+from app.knowledge.decomposition import (
+    CommerceQueryDecomposer,
+    QueryDecomposer,
+    QueryDecomposition,
+    RetrievalSubquery,
+)
 from app.knowledge.embeddings import (
     EmbeddingProvider,
     get_embedding_provider,
@@ -38,6 +44,16 @@ class KnowledgeSearchHit:
     content: str
     score: float
     effective_from: datetime
+    matched_subquery_ids: tuple[str, ...] = ()
+    matched_intents: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class KnowledgeSearchResult:
+    query: str
+    decomposition: QueryDecomposition
+    hits: list[KnowledgeSearchHit]
+    unresolved_subquery_ids: tuple[str, ...]
 
 
 class KnowledgeSearchService:
@@ -46,9 +62,11 @@ class KnowledgeSearchService:
         session: AsyncSession,
         *,
         embedding_provider: EmbeddingProvider | None = None,
+        query_decomposer: QueryDecomposer | None = None,
     ) -> None:
         self._session = session
         self.embedding_provider = embedding_provider or get_embedding_provider()
+        self.query_decomposer = query_decomposer or CommerceQueryDecomposer()
         settings = get_settings()
         if self.embedding_provider.provider_name == "deterministic_hash":
             self.min_vector_similarity = HASH_MIN_VECTOR_SIMILARITY
@@ -65,6 +83,86 @@ class KnowledgeSearchService:
         document_type: str | None = None,
         limit: int = 5,
         as_of: datetime | None = None,
+    ) -> list[KnowledgeSearchHit]:
+        result = await self.search_with_explanation(
+            context,
+            query,
+            document_type=document_type,
+            limit=limit,
+            as_of=as_of,
+        )
+        return result.hits
+
+    async def search_with_explanation(
+        self,
+        context: CommerceContext,
+        query: str,
+        *,
+        document_type: str | None = None,
+        limit: int = 5,
+        as_of: datetime | None = None,
+    ) -> KnowledgeSearchResult:
+        normalized_query = query.strip()
+        if not normalized_query:
+            decomposition = self.query_decomposer.decompose(
+                normalized_query, document_type=document_type
+            )
+            return KnowledgeSearchResult(
+                query=normalized_query,
+                decomposition=decomposition,
+                hits=[],
+                unresolved_subquery_ids=(),
+            )
+        decomposition = self.query_decomposer.decompose(
+            normalized_query, document_type=document_type
+        )
+        if not decomposition.decomposed:
+            subquery = decomposition.subqueries[0]
+            hits = await self._search_atomic(
+                context,
+                subquery.query,
+                document_type=document_type,
+                limit=limit,
+                as_of=as_of,
+            )
+            annotated_hits = [self._annotate_hit(hit, subquery) for hit in hits]
+            return KnowledgeSearchResult(
+                query=normalized_query,
+                decomposition=decomposition,
+                hits=annotated_hits,
+                unresolved_subquery_ids=(subquery.subquery_id,) if not hits else (),
+            )
+
+        per_subquery_limit = min(3, max(1, limit))
+        subquery_results: list[tuple[RetrievalSubquery, list[KnowledgeSearchHit]]] = []
+        for subquery in decomposition.subqueries:
+            hits = await self._search_atomic(
+                context,
+                subquery.query,
+                document_type=subquery.document_type,
+                limit=per_subquery_limit,
+                as_of=as_of,
+            )
+            subquery_results.append((subquery, hits))
+        return KnowledgeSearchResult(
+            query=normalized_query,
+            decomposition=decomposition,
+            hits=self._merge_subquery_hits(subquery_results, limit=limit),
+            unresolved_subquery_ids=tuple(
+                subquery.subquery_id
+                for subquery, hits in subquery_results
+                if not hits
+            ),
+        )
+
+    async def _search_atomic(
+        self,
+        context: CommerceContext,
+        query: str,
+        *,
+        document_type: str | None,
+        limit: int,
+        as_of: datetime | None,
     ) -> list[KnowledgeSearchHit]:
         normalized_query = query.strip()
         if not normalized_query:
@@ -167,6 +265,52 @@ class KnowledgeSearchService:
             if len(hits) == limit:
                 break
         return hits
+
+    @staticmethod
+    def _annotate_hit(
+        hit: KnowledgeSearchHit, subquery: RetrievalSubquery
+    ) -> KnowledgeSearchHit:
+        return replace(
+            hit,
+            matched_subquery_ids=(subquery.subquery_id,),
+            matched_intents=(subquery.intent,),
+        )
+
+    @classmethod
+    def _merge_subquery_hits(
+        cls,
+        subquery_results: list[tuple[RetrievalSubquery, list[KnowledgeSearchHit]]],
+        *,
+        limit: int,
+    ) -> list[KnowledgeSearchHit]:
+        merged: list[KnowledgeSearchHit] = []
+        index_by_citation: dict[str, int] = {}
+        max_depth = max((len(hits) for _subquery, hits in subquery_results), default=0)
+        for depth in range(max_depth):
+            for subquery, hits in subquery_results:
+                if depth >= len(hits):
+                    continue
+                hit = hits[depth]
+                existing_index = index_by_citation.get(hit.citation_id)
+                if existing_index is not None:
+                    existing = merged[existing_index]
+                    merged[existing_index] = replace(
+                        existing,
+                        matched_subquery_ids=tuple(
+                            dict.fromkeys(
+                                (*existing.matched_subquery_ids, subquery.subquery_id)
+                            )
+                        ),
+                        matched_intents=tuple(
+                            dict.fromkeys((*existing.matched_intents, subquery.intent))
+                        ),
+                    )
+                    continue
+                if len(merged) >= limit:
+                    continue
+                index_by_citation[hit.citation_id] = len(merged)
+                merged.append(cls._annotate_hit(hit, subquery))
+        return merged
 
     def _absolute_relevance(
         self,
