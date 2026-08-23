@@ -113,43 +113,7 @@ MVP 提供两个界面：
 
 ## 4. 系统架构
 
-```text
-顾客聊天页 / Agent 控制台
-             |
-             v
-         FastAPI API
-             |
-    +--------+---------+
-    |                  |
-    v                  v
-Agent Runtime     Approval Service
-    |                  |
-    v                  v
-Tool Gateway      Pending Actions
-    |
-    +-------------------------------+
-    |          |         |          |
-    v          v         v          v
-Catalog     Orders   Logistics   Knowledge
-Service     Service   Service     Service
-    |          |         |          |
-    +----------+---------+----------+
-                       |
-                       v
-              PostgreSQL + pgvector
-                       |
-                       v
-             Trace / Audit / Metrics
-```
-
-### 4.1 架构原则
-
-- **单 Agent 优先**：使用单 Agent、明确工具和业务状态机，避免无必要的多 Agent 复杂度。
-- **模型不直接访问数据库**：所有访问必须通过受控工具和服务层。
-- **可信上下文服务端注入**：`tenant_id`、`customer_id`、权限等字段不向 LLM 暴露。
-- **读写工具分离**：查询工具可自动执行；写工具进入审批工作流。
-- **业务规则确定性执行**：订单状态转换、退款资格和权限判断由代码完成，不由 Prompt 决定。
-- **全链路可追踪**：每次模型调用、工具调用、审批和状态变更都有 trace 与审计记录。
+当前系统架构已迁移到项目公共入口 [`README.md`](./README.md#系统架构)，项目计划不再重复维护。
 
 ---
 

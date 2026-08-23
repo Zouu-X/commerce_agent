@@ -1,3 +1,12 @@
+FROM python:3.12-slim AS lock
+
+ARG PIP_TOOLS_VERSION=7.6.1
+RUN python -m pip install --no-cache-dir "pip-tools==${PIP_TOOLS_VERSION}"
+
+WORKDIR /workspace
+
+ENTRYPOINT ["python", "-m", "piptools", "compile"]
+
 FROM python:3.12-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -5,7 +14,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY pyproject.toml ./
+COPY pyproject.toml requirements-py312-linux.lock ./
 
 FROM base AS test
 
@@ -13,7 +22,10 @@ COPY app ./app
 COPY tests ./tests
 COPY alembic.ini ./
 COPY migrations ./migrations
-RUN pip install --no-cache-dir ".[dev]"
+RUN python -m pip install --no-cache-dir \
+    --constraint requirements-py312-linux.lock \
+    ".[dev]" \
+    && python -m pip check
 RUN ruff check . && mypy && pytest
 
 FROM base AS runtime
@@ -21,7 +33,10 @@ FROM base AS runtime
 COPY app ./app
 COPY alembic.ini ./
 COPY migrations ./migrations
-RUN pip install --no-cache-dir ".[embedding]"
+RUN python -m pip install --no-cache-dir \
+    --constraint requirements-py312-linux.lock \
+    ".[embedding]" \
+    && python -m pip check
 
 EXPOSE 8000
 
