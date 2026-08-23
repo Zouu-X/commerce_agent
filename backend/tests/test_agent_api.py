@@ -181,6 +181,70 @@ async def test_policy_answer_uses_current_store_evidence_and_citations(
 
 
 @pytest.mark.anyio
+async def test_agent_preserves_three_decomposed_policy_evidence_items(
+    db_session: AsyncSession,
+) -> None:
+    async def override_session() -> AsyncIterator[AsyncSession]:
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_session
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            conversation_id = await create_conversation(client, 0)
+            turn = await client.post(
+                f"/api/v1/conversations/{conversation_id}/messages",
+                headers=headers(0),
+                json={
+                    "content": "订单取消、退款到账和无理由退货分别是什么规则？"
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert turn.status_code == 200
+    payload = turn.json()["message"]
+    assert "未发货" in payload["content"]
+    assert "1 至 3 个工作日" in payload["content"]
+    assert "签收后 7 天内" in payload["content"]
+    assert payload["sources"] == [
+        {"title": "订单取消规则", "version": "v1"},
+        {"title": "退款到账时间", "version": "v1"},
+        {"title": "七天/十五天无理由退货政策", "version": "v1"},
+    ]
+
+
+@pytest.mark.anyio
+async def test_agent_preserves_cross_document_type_decomposition(
+    db_session: AsyncSession,
+) -> None:
+    async def override_session() -> AsyncIterator[AsyncSession]:
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = override_session
+    transport = httpx.ASGITransport(app=app)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            conversation_id = await create_conversation(client, 0)
+            turn = await client.post(
+                f"/api/v1/conversations/{conversation_id}/messages",
+                headers=headers(0),
+                json={"content": "耳机的质保范围和日常清洁方法都说一下"},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert turn.status_code == 200
+    payload = turn.json()["message"]
+    assert "有限质保" in payload["content"]
+    assert "清洁前应断电" in payload["content"]
+    assert payload["sources"] == [
+        {"title": "商品质保说明", "version": "v1"},
+        {"title": "商品清洁与保养指南", "version": "v1"},
+    ]
+
+
+@pytest.mark.anyio
 async def test_retrieved_prompt_injection_is_cited_but_never_executed(
     db_session: AsyncSession,
 ) -> None:

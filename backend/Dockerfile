@@ -21,8 +21,8 @@ FROM base AS runtime
 COPY app ./app
 COPY alembic.ini ./
 COPY migrations ./migrations
-RUN pip install --no-cache-dir "."
+RUN pip install --no-cache-dir ".[embedding]"
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "alembic upgrade head && python -m app.commerce.seed --if-empty && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "alembic upgrade head && python -m app.commerce.seed --if-empty && python -m app.knowledge.reindex && uvicorn app.main:app --host 0.0.0.0 --port 8000"]

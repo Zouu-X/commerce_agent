@@ -5,6 +5,7 @@ from app.agent.presentation import (
     present_tool_result,
     sanitize_customer_response,
 )
+from app.agent.provider import MockCommerceProvider
 
 
 def test_order_tool_projection_hides_internal_fields_and_enums() -> None:
@@ -64,6 +65,100 @@ def test_knowledge_projection_keeps_machine_citation_out_of_model_context() -> N
     assert "quality-return" not in serialized
     assert "document_id" not in serialized
     assert presented.sources[0].citation_id == "quality-return:v1#chunk-1"
+
+
+def test_knowledge_projection_keeps_three_subquery_evidence_items() -> None:
+    citations = [
+        {
+            "citation_id": f"source-{index}:v1#chunk-1",
+            "title": f"资料 {index}",
+            "version": "v1",
+            "content": f"第 {index} 个问题的证据。",
+        }
+        for index in range(1, 4)
+    ]
+    presented = present_tool_result(
+        "search_store_policy",
+        {
+            "ok": True,
+            "data": {
+                "citations": citations,
+                "decomposition": {
+                    "decomposed": True,
+                    "subqueries": [
+                        {
+                            "subquery_id": f"subquery-{index}",
+                            "intent": f"internal_intent_{index}",
+                            "intent_label": f"问题 {index}",
+                        }
+                        for index in range(1, 4)
+                    ],
+                    "unresolved_subquery_ids": [],
+                },
+            },
+        },
+    )
+
+    assert len(presented.sources) == 3
+    assert len(presented.data["sources"]) == 3
+    assert presented.data["coverage"] == {
+        "resolved": ["问题 1", "问题 2", "问题 3"],
+        "unresolved": [],
+    }
+
+
+def test_knowledge_projection_explains_partial_coverage_without_internal_ids() -> None:
+    presented = present_tool_result(
+        "search_store_policy",
+        {
+            "ok": True,
+            "data": {
+                "citations": [
+                    {
+                        "citation_id": "shipping-time:v1#chunk-1",
+                        "title": "发货时效",
+                        "version": "v1",
+                        "content": "订单会在规定时间内发货。",
+                    }
+                ],
+                "decomposition": {
+                    "decomposed": True,
+                    "subqueries": [
+                        {
+                            "subquery_id": "subquery-1",
+                            "intent": "shipping_time",
+                            "intent_label": "正常发货时效",
+                        },
+                        {
+                            "subquery_id": "subquery-2",
+                            "intent": "delay_compensation",
+                            "intent_label": "延迟补偿",
+                        },
+                    ],
+                    "unresolved_subquery_ids": ["subquery-2"],
+                },
+            },
+        },
+    )
+
+    serialized = json.dumps(presented.data, ensure_ascii=False)
+    assert presented.data["coverage"] == {
+        "resolved": ["正常发货时效"],
+        "unresolved": ["延迟补偿"],
+    }
+    assert "尚无足够证据回答：延迟补偿" in presented.data["summary"]
+    assert "不得推测" in presented.data["summary"]
+    assert "subquery-" not in serialized
+    assert "shipping_time" not in serialized
+    assert "delay_compensation" not in serialized
+
+    customer_response = MockCommerceProvider._render_customer_safe_result(
+        "search_store_policy", presented.data
+    )
+    assert "订单会在规定时间内发货" in customer_response
+    assert "关于延迟补偿" in customer_response
+    assert "没有足够证据" in customer_response
+    assert "不得推测" not in customer_response
 
 
 def test_final_response_guard_removes_internal_protocol_details() -> None:

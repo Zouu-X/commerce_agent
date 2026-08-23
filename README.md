@@ -24,8 +24,9 @@ make up
 make smoke
 ```
 
-`make up` 会在后台构建并启动数据库、API 和 Web，并等待服务健康。首次构建需要下载镜像和
-Python/npm 依赖，通常在数分钟内完成；后续启动会复用缓存。
+`make up` 会在后台构建并启动数据库、API 和 Web，并等待服务健康。首次构建需要下载镜像、
+Python/npm 依赖和约 90MB 的 BGE ONNX 模型，通常在数分钟内完成；模型保存在
+Docker named volume，后续启动会复用缓存。
 
 启动后访问：
 
@@ -77,6 +78,23 @@ make eval-mock
 该命令会迁移并重置 Demo 数据，然后运行 60 条用例。评测写操作只保留 Trace 证据，结束前会
 清理自己创建的待审批记录，不污染人工审批队列。报告同时写入数据库和
 `eval-results/evaluation-<run_id>.json`，`eval-results/latest.json` 指向最近一次结果。
+
+只评测 RAG 检索、不经过 Agent 和生成模型：
+
+```bash
+make eval-retrieval
+```
+
+该命令会重置为确定性 Demo 数据并运行 100 条逐条带标注理由、可人工审查的 Retrieval Gold Set。
+也可以只运行用于调参的 75 条 `dev`，或冻结的 25 条 `holdout`：
+
+```bash
+make eval-retrieval RETRIEVAL_SPLIT=dev
+make eval-retrieval RETRIEVAL_SPLIT=holdout
+```
+
+报告写入 `eval-results/retrieval-evaluation-<timestamp>.json`，最近一次结果同步到
+`eval-results/retrieval-latest.json`。
 
 ## 电商沙盒
 
@@ -162,9 +180,26 @@ Milestone 3 将店铺政策和商品指南存入 PostgreSQL，并使用两条召
 已经过期的政策不会进入候选集。内部检索结果会返回文档版本和 `citation_id`，供 Trace 和评测
 核验；客户对话只展示资料标题和版本，不暴露切片 ID。
 
-当前 Demo 使用 64 维确定性本地特征向量，不需要外部 Embedding API Key，便于 CI 和招聘方
-重复运行。它用于展示完整 pgvector/RRF 架构，不等同于生产级语义模型；生产环境可以在不改
-检索接口的情况下替换为真实 embedding provider。
+复合问题会先经过一个有界、确定性的电商意图规划器。例如“订单取消后，多长时间退款到账？”会
+拆成“订单取消规则”和“退款到账时间”两路独立检索。每路仍执行相同的身份、文档类型、版本和
+相关性过滤，再用 round-robin 合并并去重；只要调用方的 `limit` 足够，就优先保留每个子问题的
+第一条证据，避免一个强势意图挤掉另一个意图。API 与工具 Trace 会记录拆分原因、canonical
+subquery、命中意图和未解决子问题；生成边界最多保留 3 路证据，并把未解决部分转换成客户可读
+的意图标签，明确要求模型不得补全。单一意图通常保持原检索路径；如果问题明确否定另一个意图，
+则只用保留意图的 canonical query 检索，避免否定词本身召回错误政策。规划器最多生成 3 个子问题，
+不调用 LLM，因而结果可重复、无额外推理成本，也不会让模型动态扩大检索范围。
+
+运行时默认使用 `BAAI/bge-small-zh-v1.5`：一个中文专用、24M 参数、512 维的真实
+Embedding 模型。FastEmbed 通过 ONNX Runtime 在 CPU 本地执行，不需要 API Key。query 和
+document 使用模型各自的非对称编码入口，向量在重建时记录 provider、model 和 dimensions；
+检索遇到不匹配的旧向量会忽略语义通道，防止静默混用不同模型的向量空间。
+
+确定性 Hash provider 仍作为快速、离线的单元测试 test double，但不再是 Demo 运行时默认值。
+更换 Embedding 模型或导入新知识后，可显式重建：
+
+```bash
+make reindex
+```
 
 直接检索当前店铺政策：
 
@@ -298,6 +333,43 @@ curl \
 模型的泛化表现。默认 DeepSeek Provider 仍使用同一数据集和指标，并按
 `provider / model / prompt_version / dataset_version` 保存结果，便于 A/B 对比。Mock token 和
 成本均为 0；真实 Provider 会记录返回的 usage，并使用环境变量中的每百万 token 单价估算成本。
+
+### Retrieval Gold Set
+
+Agent 端到端评测之外，项目还维护独立的 `retrieval-gold-v1.1-intents`。它以稳定的
+`source_key:version` 为判断单位，不依赖可能随切片策略变化的 `chunk-N`；原始命中仍会保留完整
+`citation_id` 供诊断。100 条用例固定拆分为 75 条 dev 和 25 条 holdout，覆盖：
+
+- 精确问法、口语改写、隐含意图、数字和订单号噪声；
+- 退款/退货、配送失败/物流停滞/延迟补偿等 hard negative；
+- 多政策和跨文档类型的复合问题；
+- 两家店铺的不同规则、历史版本和当前版本；
+- Prompt Injection 安全知识以及无答案/OOD 查询。
+
+每条标签包含 1～3 级相关度、已知 hard negative、禁止出现的版本、标注理由和场景标签；7 条
+复合问题还显式标注预期意图，不通过“是否碰巧命中文档”反推拆分是否正确。
+Runner 直接调用 `KnowledgeSearchService`，不经过工具路由、Prompt 或模型生成，输出
+Recall@1/3/5、Precision@3、MRR、nDCG@5、无答案误召回率、hard-negative 命中率、禁止来源
+命中率、scope 泄漏率、拆分意图 Precision/Recall、误拆分率和子问题解决率。每份报告同时记录
+检索配置、Embedding 实现和数据集版本，后续可以对
+关键词检索、当前哈希向量、真实 Embedding 和 reranker 做同集 A/B。全量报告还会分别汇总 dev
+和 holdout，并为失败用例保存命中分数、缺失来源和明确失败原因。
+
+2026-08-22 在本地 Docker PostgreSQL + pgvector 上的同集 A/B：
+
+| 检索配置（100 条） | 通过 | Recall@3 | MRR | nDCG@5 | No-answer | Hard-negative 命中 |
+|---|---:|---:|---:|---:|---:|---:|
+| Hash test double 基线 | 83% | 91.40% | 94.09% | 92.11% | 85.71% | 6.17% |
+| BGE-small-zh + 关键词 + RRF | 88% | 91.40% | 94.09% | 92.11% | 100% | 1.23% |
+| BGE + RRF + Query Decomposition | **95%** | **95.70%** | **95.16%** | **95.12%** | 100% | 1.23% |
+
+这组结果表明：在当前只有 28 个短切片的语料上，真实 Embedding 的主要价值是减少无答案误召回和
+相似但错误的政策命中，而非显著提高已被关键词通道主导的排序指标。纯向量对照在 dev/holdout 仅有
+57.33%/60.00% 通过率，所以保留关键词精确匹配和 RRF，并只用 dev 校准 0.65 绝对阈值与 0.95
+相对阈值。Query Decomposition 则把 7 条复合问题全部正确拆分并解决，两项意图指标均为 100%，
+非复合问题误拆分率为 0；冻结的 holdout 通过率由 92% 提升到 96%。加入否定意图 normalization
+后，全量 Recall@3 95.70%、nDCG@5 95.12%，首次通过所有检索质量门。剩余 5 条失败仍集中在
+单意图的相邻政策排序，后续优先用 reranker 处理。
 
 评测 API：
 

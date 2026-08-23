@@ -10,6 +10,7 @@ def test_functional_test_process_forces_mock_provider() -> None:
 
     assert settings.model_provider == "mock"
     assert settings.model_name == "mock-commerce-agent"
+    assert settings.embedding_provider == "hash"
 
 
 def test_settings_reads_raw_model_api_key_file(tmp_path: Path) -> None:

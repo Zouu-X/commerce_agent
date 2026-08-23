@@ -175,13 +175,24 @@ def present_tool_result(tool_name: str, result: dict[str, Any]) -> PresentedTool
         )
 
     if tool_name == "search_store_policy":
+        decomposition = data.get("decomposition")
+        subqueries = (
+            decomposition.get("subqueries", [])
+            if isinstance(decomposition, dict)
+            else []
+        )
+        is_decomposed = bool(
+            isinstance(decomposition, dict) and decomposition.get("decomposed")
+        )
+        evidence_limit = min(3, max(2, len(subqueries))) if is_decomposed else 2
+        selected_citations = data.get("citations", [])[:evidence_limit]
         sources = [
             CustomerSource(
                 citation_id=str(item.get("citation_id", "")),
                 title=str(item.get("title", "店铺政策")),
                 version=str(item.get("version", "")),
             )
-            for item in data.get("citations", [])[:2]
+            for item in selected_citations
             if item.get("citation_id")
         ]
         evidence = [
@@ -190,15 +201,52 @@ def present_tool_result(tool_name: str, result: dict[str, Any]) -> PresentedTool
                 "version": item.get("version"),
                 "content": item.get("content"),
             }
-            for item in data.get("citations", [])[:2]
+            for item in selected_citations
         ]
-        summary = (
-            "请依据以下当前有效的店铺资料回答，并用资料标题说明依据。"
-            if evidence
-            else "当前有效知识中没有足够证据回答这个问题，建议转人工确认。"
-        )
+        unresolved_ids = {
+            str(item)
+            for item in (
+                decomposition.get("unresolved_subquery_ids", [])
+                if isinstance(decomposition, dict)
+                else []
+            )
+        }
+        resolved_topics: list[str] = []
+        unresolved_topics: list[str] = []
+        if is_decomposed:
+            for subquery in subqueries:
+                if not isinstance(subquery, dict):
+                    continue
+                label = str(subquery.get("intent_label") or "相关问题")
+                topic_bucket = (
+                    unresolved_topics
+                    if str(subquery.get("subquery_id")) in unresolved_ids
+                    else resolved_topics
+                )
+                if label not in topic_bucket:
+                    topic_bucket.append(label)
+
+        if evidence and unresolved_topics:
+            summary = (
+                f"当前资料可以回答：{'、'.join(resolved_topics) or '部分问题'}；"
+                f"尚无足够证据回答：{'、'.join(unresolved_topics)}。"
+                "回答时必须明确区分已确认和无法确认的部分，不得推测。"
+            )
+        elif evidence:
+            summary = "请依据以下当前有效的店铺资料回答，并用资料标题说明依据。"
+        else:
+            summary = "当前有效知识中没有足够证据回答这个问题，建议转人工确认。"
+        presented_data: dict[str, Any] = {"summary": summary, "sources": evidence}
+        if is_decomposed:
+            # Only customer-readable labels cross the presentation boundary. Internal
+            # subquery IDs and machine intent names remain available in Trace.
+            presented_data["coverage"] = {
+                "resolved": resolved_topics,
+                "unresolved": unresolved_topics,
+            }
         return PresentedToolResult(
-            data={"summary": summary, "sources": evidence}, sources=sources
+            data=presented_data,
+            sources=sources,
         )
 
     if tool_name in {

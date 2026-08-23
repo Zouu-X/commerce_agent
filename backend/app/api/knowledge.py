@@ -7,7 +7,12 @@ from app.api.dependencies import get_commerce_context
 from app.commerce.context import CommerceContext
 from app.db.session import get_db_session
 from app.knowledge.service import KnowledgeSearchService
-from app.schemas.knowledge import KnowledgeSearchHitRead, KnowledgeSearchRead
+from app.schemas.knowledge import (
+    KnowledgeSearchHitRead,
+    KnowledgeSearchRead,
+    QueryDecompositionRead,
+    RetrievalSubqueryRead,
+)
 
 router = APIRouter(prefix="/api/v1/knowledge", tags=["knowledge"])
 SessionDependency = Annotated[AsyncSession, Depends(get_db_session)]
@@ -22,7 +27,7 @@ async def search_knowledge(
     document_type: Literal["policy", "product_guide", "security_guide"] | None = None,
     limit: Annotated[int, Query(ge=1, le=10)] = 5,
 ) -> KnowledgeSearchRead:
-    hits = await KnowledgeSearchService(session).search(
+    result = await KnowledgeSearchService(session).search_with_explanation(
         context,
         query,
         document_type=document_type,
@@ -40,7 +45,24 @@ async def search_knowledge(
                 content=hit.content,
                 score=hit.score,
                 effective_from=hit.effective_from,
+                matched_subquery_ids=list(hit.matched_subquery_ids),
+                matched_intents=list(hit.matched_intents),
             )
-            for hit in hits
+            for hit in result.hits
         ],
+        decomposition=QueryDecompositionRead(
+            decomposed=result.decomposition.decomposed,
+            reason=result.decomposition.reason,
+            subqueries=[
+                RetrievalSubqueryRead(
+                    subquery_id=subquery.subquery_id,
+                    intent=subquery.intent,
+                    intent_label=subquery.intent_label,
+                    query=subquery.query,
+                    document_type=subquery.document_type,
+                )
+                for subquery in result.decomposition.subqueries
+            ],
+            unresolved_subquery_ids=list(result.unresolved_subquery_ids),
+        ),
     )
