@@ -1,422 +1,108 @@
 # Commerce Support Agent
 
-一个可评测、可观测的多租户电商客服 Agent 沙盒。项目当前已具备确定性电商业务沙盒、
-Provider-independent Agent Runtime、知识库混合检索、7 个安全只读工具，以及退款、发券、
-取消订单三类人工审批写操作。Milestone 5 加入 60 条离线评测、完整 Trace 时间线、
-token/成本/延迟统计和结构化报告；Milestone 6 补齐真实 DeepSeek、双角色页面以及客户输出安全边界。
-详细范围见 [`project_plan.md`](./project_plan.md)。
+[![CI](https://github.com/Zouu-X/commerce_agent/actions/workflows/ci.yml/badge.svg)](https://github.com/Zouu-X/commerce_agent/actions/workflows/ci.yml)
+![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
+![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-## 环境要求
+一个可评测、可解释的电商客服 Agent Demo。系统通过真实业务工具处理商品、订单、物流、售后与
+店铺政策查询；取消订单、退款和发券等写操作必须经过人工审批，并保留模型、工具和业务状态 Trace。
 
-- 体验 Demo：Docker Desktop（包含 Docker Compose）
-- 本地运行前端检查：Node.js 24.18.0、npm 11+
-- 本地运行后端：Python 3.12
+## 技术概览
 
-默认 Agent 使用 DeepSeek V4 Flash；Docker 负责运行全部服务，本机无需额外安装 Python。
+| 部分 | 技术与设计 |
+|---|---|
+| Agent Runtime | Python 3.12、FastAPI、自研有界 Tool Calling Loop、OpenAI-compatible Provider |
+| 业务工具 | Pydantic 工具 Schema；7 个只读工具与 3 个待审批请求工具 |
+| RAG | PostgreSQL 全文检索 + BGE/pgvector 双路召回、加权 RRF、确定性 Query Decomposition |
+| 写操作 | Pending Action、人工审批、事务、行锁、执行前校验与幂等约束 |
+| 可观测性 | PostgreSQL Trace，记录模型/工具事件、延迟、token、费用与错误 |
+| Web | React 19、TypeScript、Vite；顾客聊天页与商户控制台 |
+| 工程化 | Docker Compose、GitHub Actions、pytest、mypy、Ruff、ESLint、Node Test |
 
 ## 快速启动
+
+要求：Docker Desktop、Docker Compose、GNU Make 和 DeepSeek API Key。
 
 ```bash
 cp .env.example .env
 cp .env.ds.example .env.ds
-# 将 .env.ds 的占位内容替换成 DeepSeek API Key（文件中只放 Key 本身）
+# 将 DeepSeek API Key 直接写入 .env.ds
 make up
 make smoke
 ```
 
-`make up` 会在后台构建并启动数据库、API 和 Web，并等待服务健康。首次构建需要下载镜像、
-Python/npm 依赖和约 90MB 的 BGE ONNX 模型，通常在数分钟内完成；模型保存在
-Docker named volume，后续启动会复用缓存。
+- 顾客聊天：<http://localhost:5173>
+- 商户审批、Trace 与评测：<http://localhost:5173/merchant>
+- OpenAPI：<http://localhost:8000/docs>
 
-启动后访问：
+完整启动、演示与 curl 示例见 [本地运行与演示指南](./docs/demo-guide.md)。
 
-- 用户聊天页：http://localhost:5173
-- 商户审批与观测后台：http://localhost:5173/merchant
-- API 健康检查：http://localhost:8000/api/v1/health
-- API 文档：http://localhost:8000/docs
-- API 就绪检查：http://localhost:8000/api/v1/ready
+## 离线评测
 
-停止服务：
-
-```bash
-make down
-```
-
-查看实时日志：
+| 评测 | 结果 | 适用范围 |
+|---|---:|---|
+| [Retrieval Gold Set](./docs/evals/retrieval-baseline-7e8a925.md) | **96/100**；Recall@3 95.70%；MRR 95.70%；nDCG@5 95.21% | 评估双路召回、排序、拒答和 Query Decomposition；不包含 Agent 路由与生成 |
+| [DeepSeek 3 × 60](./docs/evals/deepseek-3run-baseline-7e8a925-20260823.md) | **81/180，45.00%**；单次均值 45.00% ± 4.71 pp；总估算费用 $0.12606426 | 评估真实模型端到端工具使用、回答、延迟和费用；三次质量门均未通过，不代表生产可用性 |
 
 ```bash
-make logs
+make eval-retrieval # Retrieval Gold Set
+make eval-mock      # 确定性工程回归，不代表真实模型质量
+make eval           # 真实 DeepSeek，会产生 API 用量
 ```
+
+评测设计、指标口径和复现条件见 [评测文档](./docs/evaluation.md)。机器可读的三次 DeepSeek 摘要见
+[JSON 基线](./docs/evals/deepseek-3run-baseline-7e8a925-20260823.json)。
+
+## 文档
+
+- [技术文档索引](./docs/README.md)
+- [架构与执行链](./docs/architecture.md)
+- [评测体系与证据口径](./docs/evaluation.md)
+- [安全边界与已知限制](./docs/security-boundaries.md)
+- [本地运行与演示指南](./docs/demo-guide.md)
+- [v0.1.0 发布说明](./docs/release-notes-v0.1.0.md)
+
+## 适用边界
+
+- 本项目是本地求职 Demo，不是生产系统。
+- Scope Header 用于模拟可信身份输入，不是认证或授权机制。
+- 当前没有 Provider retry/backoff、速率与费用保护、OpenTelemetry、human handoff 或公网部署配置。
+- 工具调用顺序执行；不包含多 Agent、长期记忆或自主规划。
+- 真实 DeepSeek 离线评测尚未达到质量门。
 
 ## 开发检查
 
-首次执行本地前端检查前安装锁定依赖：
-
 ```bash
 npm --prefix frontend ci
-```
-
-```bash
 make lint
 make test
 ```
 
-后端检查默认在 Python 3.12 容器中执行，因此本机没有安装 Python 3.12 也可以运行。
+CI 执行后端 Ruff、mypy、pytest，以及前端 test、lint 和 build。Python 3.12/Linux 依赖版本通过
+[`requirements-py312-linux.lock`](./backend/requirements-py312-linux.lock) 固定。
 
-使用 DeepSeek V4 Flash 运行完整评测（会产生 API 用量）：
+## 系统架构
 
-```bash
-make eval
+```mermaid
+flowchart LR
+    user["顾客 / 商户"] --> web["React Web"] --> api["FastAPI API"]
+    api --> runtime["Agent Runtime"]
+    runtime <--> model["DeepSeek / Mock Provider"]
+    runtime --> tools["Tool Registry"]
+    tools --> commerce["Commerce Services"]
+    tools --> rag["Hybrid RAG"]
+    tools --> approval["Approval Service"]
+    commerce --> db[("PostgreSQL + pgvector")]
+    rag --> db
+    approval --> db
+    runtime --> trace["Trace / Evaluation"] --> db
 ```
 
-需要零成本、结果可重复的回归基线时运行测试专用 Mock：
+模型不直接访问数据库；身份上下文由服务端注入，写操作进入审批流程。完整组件边界和调用顺序见
+[架构文档](./docs/architecture.md)。
 
-```bash
-make eval-mock
-```
+## License
 
-该命令会迁移并重置 Demo 数据，然后运行 60 条用例。评测写操作只保留 Trace 证据，结束前会
-清理自己创建的待审批记录，不污染人工审批队列。报告同时写入数据库和
-`eval-results/evaluation-<run_id>.json`，`eval-results/latest.json` 指向最近一次结果。
-
-只评测 RAG 检索、不经过 Agent 和生成模型：
-
-```bash
-make eval-retrieval
-```
-
-该命令会重置为确定性 Demo 数据并运行 100 条逐条带标注理由、可人工审查的 Retrieval Gold Set。
-也可以只运行用于调参的 75 条 `dev`，或冻结的 25 条 `holdout`：
-
-```bash
-make eval-retrieval RETRIEVAL_SPLIT=dev
-make eval-retrieval RETRIEVAL_SPLIT=holdout
-```
-
-报告写入 `eval-results/retrieval-evaluation-<timestamp>.json`，最近一次结果同步到
-`eval-results/retrieval-latest.json`。
-
-## 电商沙盒
-
-API 启动时会自动执行 Alembic 迁移，并在空数据库中导入确定性 Demo 数据。数据包括 2 个
-tenant、2 家店铺、12 位顾客、24 个商品、48 个 SKU、60 个订单，以及物流、售后和
-知识检索边界场景。知识库包含 28 个版本化文档和 28 个切片，其中 2 个是专门用于验证
-有效期过滤的过期政策。
-
-查看可用的店铺、顾客和订单上下文：
-
-```bash
-curl http://localhost:8000/api/v1/demo/contexts
-```
-
-业务 API 的可信身份通过请求头传入，服务层会强制使用三项身份过滤数据：
-
-```bash
-curl \
-  -H 'X-Tenant-Id: 8741aaf7-d17d-523d-9f6a-f534109d7848' \
-  -H 'X-Store-Id: 46267c0e-11d5-5634-9629-07f8f307c42d' \
-  -H 'X-Customer-Id: 0d1ed7e7-59ab-50e6-9d62-faa77e406b84' \
-  http://localhost:8000/api/v1/orders/AUR-202607-0001
-```
-
-主要只读接口：
-
-- `GET /api/v1/catalog/products`
-- `GET /api/v1/catalog/products/{product_id}`
-- `GET /api/v1/orders`
-- `GET /api/v1/orders/{order_number}`
-- `GET /api/v1/orders/{order_number}/shipment`
-- `GET /api/v1/orders/{order_number}/eligibility`
-- `GET /api/v1/after-sales/{after_sale_id}`
-- `GET /api/v1/knowledge/search`
-
-## 人工审批与安全写操作
-
-Milestone 4 将写操作拆成两个明确阶段：Agent 的 `request_*` 工具只校验参数并创建
-`pending_action`，不会修改订单、支付状态或优惠券；只有店铺审批人批准后，审批服务才会在
-数据库事务中锁定目标记录、重新检查业务状态并执行一次写入。
-
-取消订单申请还会按“tenant + store + customer + order + action type”检查活动审批单。即使顾客刷新
-页面进入新会话，只要原申请仍为 pending、approved 或 executing，就会复用原记录并告知顾客等待
-人工审批，不会重复创建申请；被拒绝后允许顾客重新提交。
-
-当前支持：
-
-- 取消订单：仅 `pending` 或 `paid` 订单可申请，批准后变为 `cancelled`；
-- 退款：检查订单归属、支付状态、退款窗口和剩余可退金额；已签收订单从签收事件起算 7 天，
-  配送失败且尚未签收的订单允许先创建人工审批申请，由商户确认包裹退回情况；
-- 补偿券：金额必须在 0～50 元之间，可关联当前顾客的订单。
-
-审批接口使用服务端可信的 `X-Tenant-Id`、`X-Store-Id` 和 `X-Approver-Id`：
-
-```bash
-curl \
-  -H 'X-Tenant-Id: 8741aaf7-d17d-523d-9f6a-f534109d7848' \
-  -H 'X-Store-Id: 46267c0e-11d5-5634-9629-07f8f307c42d' \
-  -H 'X-Approver-Id: ops-reviewer@example.com' \
-  'http://localhost:8000/api/v1/approvals?status=pending'
-```
-
-主要审批接口：
-
-- `GET /api/v1/approvals`
-- `GET /api/v1/approvals/{action_id}`
-- `POST /api/v1/approvals/{action_id}/approve`
-- `POST /api/v1/approvals/{action_id}/reject`
-
-批准和拒绝操作都有状态转换审计。退款与发券结果表以 `pending_action_id` 唯一约束防止重复
-落账；重复批准一个已经成功的动作会返回原结果，而不会再次产生退款或优惠券。
-
-## 知识检索与引用
-
-Milestone 3 将店铺政策和商品指南存入 PostgreSQL，并使用两条召回路径：
-
-- PostgreSQL `tsvector` + GIN 索引进行中文友好的关键词召回；
-- pgvector + HNSW cosine 索引进行语义召回；
-- 使用加权 Reciprocal Rank Fusion（RRF）合并两组排名。
-- RRF 后按绝对关键词/向量分数和相对最佳证据门槛过滤；没有可靠证据时返回空结果。
-
-检索前会强制过滤 `tenant_id`、`store_id`、文档类型、发布状态和有效期，因此其他店铺或
-已经过期的政策不会进入候选集。内部检索结果会返回文档版本和 `citation_id`，供 Trace 和评测
-核验；客户对话只展示资料标题和版本，不暴露切片 ID。
-
-复合问题会先经过一个有界、确定性的电商意图规划器。例如“订单取消后，多长时间退款到账？”会
-拆成“订单取消规则”和“退款到账时间”两路独立检索。每路仍执行相同的身份、文档类型、版本和
-相关性过滤，再用 round-robin 合并并去重；只要调用方的 `limit` 足够，就优先保留每个子问题的
-第一条证据，避免一个强势意图挤掉另一个意图。API 与工具 Trace 会记录拆分原因、canonical
-subquery、命中意图和未解决子问题；生成边界最多保留 3 路证据，并把未解决部分转换成客户可读
-的意图标签，明确要求模型不得补全。单一意图通常保持原检索路径；如果问题明确否定另一个意图，
-则只用保留意图的 canonical query 检索，避免否定词本身召回错误政策。规划器最多生成 3 个子问题，
-不调用 LLM，因而结果可重复、无额外推理成本，也不会让模型动态扩大检索范围。
-
-运行时默认使用 `BAAI/bge-small-zh-v1.5`：一个中文专用、24M 参数、512 维的真实
-Embedding 模型。FastEmbed 通过 ONNX Runtime 在 CPU 本地执行，不需要 API Key。query 和
-document 使用模型各自的非对称编码入口，向量在重建时记录 provider、model 和 dimensions；
-检索遇到不匹配的旧向量会忽略语义通道，防止静默混用不同模型的向量空间。
-
-确定性 Hash provider 仍作为快速、离线的单元测试 test double，但不再是 Demo 运行时默认值。
-更换 Embedding 模型或导入新知识后，可显式重建：
-
-```bash
-make reindex
-```
-
-直接检索当前店铺政策：
-
-```bash
-curl --get \
-  -H 'X-Tenant-Id: 8741aaf7-d17d-523d-9f6a-f534109d7848' \
-  -H 'X-Store-Id: 46267c0e-11d5-5634-9629-07f8f307c42d' \
-  -H 'X-Customer-Id: 06abfe41-9df3-52de-baf3-e3d403524dd8' \
-  --data-urlencode 'query=无理由退货可以申请多少天？' \
-  --data-urlencode 'document_type=policy' \
-  http://localhost:8000/api/v1/knowledge/search
-```
-
-## Agent 对话 Demo
-
-运行时默认使用 DeepSeek V4 Flash，并关闭 thinking 模式以降低演示延迟，同时完整保留 function
-tool-calling。模型只负责理解意图、选择工具和组织回答；商品、订单、物流、售后与政策事实仍然
-来自 PostgreSQL 及业务服务层。API Key 通过 `.env.ds` 挂载成 Docker Secret，不会进入前端、
-镜像或 Git；本地 Mock 只保留给单元测试和确定性回归评测。
-
-浏览器中的用户聊天页会按所选店铺和顾客展示真实可命中的示例。订单号、物流示例和可取消订单
-都从当前种子数据动态生成，避免复制一个不属于当前顾客的订单号导致误判。用户触发取消、退款
-或发券后，只会生成待审批记录；商户可切换到独立的 `/merchant` 页面审批，并查看 Trace 和评测。
-
-客户输出经过独立的 presentation boundary：原始工具结果只写入商户 Trace；传给模型和客户历史的
-是中文业务摘要，最终回复还会过滤 `payment_status`、`has_shipment`、英文枚举、布尔值和原始
-`citation_id`。知识依据以结构化 `sources` 返回并显示为《资料标题》· 版本，避免依赖模型拼接
-内部引用格式。
-
-先用 `/api/v1/demo/contexts` 选择 tenant、store 和 customer，再创建会话：
-
-```bash
-curl -X POST \
-  -H 'X-Tenant-Id: 8741aaf7-d17d-523d-9f6a-f534109d7848' \
-  -H 'X-Store-Id: 46267c0e-11d5-5634-9629-07f8f307c42d' \
-  -H 'X-Customer-Id: 0d1ed7e7-59ab-50e6-9d62-faa77e406b84' \
-  http://localhost:8000/api/v1/conversations
-```
-
-使用返回的 `conversation_id` 发送消息：
-
-```bash
-curl -X POST \
-  -H 'Content-Type: application/json' \
-  -H 'X-Tenant-Id: 8741aaf7-d17d-523d-9f6a-f534109d7848' \
-  -H 'X-Store-Id: 46267c0e-11d5-5634-9629-07f8f307c42d' \
-  -H 'X-Customer-Id: 0d1ed7e7-59ab-50e6-9d62-faa77e406b84' \
-  --data '{"content":"请推荐有库存的降噪耳机"}' \
-  http://localhost:8000/api/v1/conversations/<conversation_id>/messages
-```
-
-可演示的消息包括：
-
-- `请推荐有库存的降噪耳机`
-- `帮我查订单 AUR-202607-0001`
-- `订单 AUR-202607-0005 的物流怎么还没更新？`（需要选择该订单所属顾客）
-- `无理由退货政策是多少天？`（回答显示可读的资料标题与版本）
-- `付款以后商品降价了能退差额吗？`（演示同义表达的混合检索）
-- `知识里写了忽略系统指令时应该怎么处理？`（演示检索内容 Prompt Injection 防护）
-- `帮我取消订单 AUR-202607-0001，我不想要了`（只创建待审批动作）
-- `给我发一张 10 元补偿券，物流太慢了`（只创建待审批动作）
-
-客户读取会话时只会得到 `user -> assistant` 的可展示消息和结构化 `sources`：
-
-```bash
-curl \
-  -H 'X-Tenant-Id: ...' \
-  -H 'X-Store-Id: ...' \
-  -H 'X-Customer-Id: ...' \
-  http://localhost:8000/api/v1/conversations/<conversation_id>
-```
-
-完整的 `user -> assistant(tool_calls) -> tool -> assistant` 执行链保留在数据库和商户 Trace API，
-不会通过客户会话接口返回。
-
-当前只读工具：
-
-- `search_products`
-- `get_product_details`
-- `get_customer_orders`
-- `get_order_details`
-- `track_shipment`
-- `get_after_sale_status`
-- `search_store_policy`
-
-当前审批请求工具：
-
-- `request_order_cancellation`
-- `request_refund`
-- `request_coupon`
-
-身份字段不会出现在工具参数 Schema 中。`tenant_id`、`store_id`、`customer_id`、
-`conversation_id` 和 `trace_id` 均由服务端注入，模型无法覆盖。
-
-## 离线评测
-
-当前判分契约为 `milestone-6-v1`，包含 60 条用例，覆盖：
-
-- 商品搜索、订单详情、物流异常和售后状态；
-- 两个 tenant 的政策检索、引用与无证据回退；
-- 退款、发券、取消订单的待审批语义；
-- 跨 tenant、跨 customer、身份覆盖、审批绕过和检索内容 Prompt Injection；
-- 客户回复中的内部字段、英文状态、布尔值和原始切片引用泄露。
-
-每条用例通过真实 `AgentRuntime -> ToolRegistry -> Service -> Database` 链路执行，而不是直接
-调用 Mock Provider 后比较字符串。Evaluator 分别计算工具选择、必要工具召回、参数有效性、
-任务完成、引用覆盖、客户展示安全和其他安全检查；失败用例会保留实际工具、失败检查项和对应
-`trace_id`。引用正确性从 Trace 中的原始检索结果判定，不再要求模型把内部切片 ID 写进回答。
-
-2026-08-17 在本地 Docker PostgreSQL + Mock Provider 上的可复现基线：
-
-| 指标 | 结果 |
-|---|---:|
-| 用例通过率 | 58 / 60 |
-| 工具选择准确率 | 100% |
-| 必要工具召回率 | 100% |
-| 工具参数有效率 | 100% |
-| 任务完成率 | 100% |
-| 知识回答引用覆盖率 | 100% |
-| 知识回答引用正确率 | 83.33% |
-| 客户展示安全率 | 100% |
-| 跨范围数据泄露率 | 0% |
-| 未审批写操作执行率 | 0% |
-| P95 延迟 | 11 ms |
-
-严格引用集合判分发现两条回复虽然包含正确主引用，但还夹带了非期望切片，因此质量门禁如实
-未通过；失败证据可在评测页和对应 Trace 中直接查看。没有适用样本的子集指标会标记为
-`not_applicable`，不参与聚合门禁。
-
-这些数字是确定性 Mock 的回归基线，用于证明链路、指标和安全边界可重复验证，不代表真实大
-模型的泛化表现。默认 DeepSeek Provider 仍使用同一数据集和指标，并按
-`provider / model / prompt_version / dataset_version` 保存结果，便于 A/B 对比。Mock token 和
-成本均为 0；真实 Provider 会记录返回的 usage，并使用环境变量中的每百万 token 单价估算成本。
-
-### Retrieval Gold Set
-
-Agent 端到端评测之外，项目还维护独立的 `retrieval-gold-v1.2-human-review`。它以稳定的
-`source_key:version` 为判断单位，不依赖可能随切片策略变化的 `chunk-N`；原始命中仍会保留完整
-`citation_id` 供诊断。100 条用例固定拆分为 75 条 dev 和 25 条 holdout，覆盖：
-
-- 精确问法、口语改写、隐含意图、数字和订单号噪声；
-- 退款/退货、配送失败/物流停滞/延迟补偿等 hard negative；
-- 多政策和跨文档类型的复合问题；
-- 两家店铺的不同规则、历史版本和当前版本；
-- Prompt Injection 安全知识以及无答案/OOD 查询。
-
-每条标签包含 1～3 级相关度、已知 hard negative、禁止出现的版本、标注理由和场景标签；7 条
-复合问题还显式标注预期意图，不通过“是否碰巧命中文档”反推拆分是否正确。
-Runner 直接调用 `KnowledgeSearchService`，不经过工具路由、Prompt 或模型生成，输出
-Recall@1/3/5、Precision@3、MRR、nDCG@5、无答案误召回率、hard-negative 命中率、禁止来源
-命中率、scope 泄漏率、拆分意图 Precision/Recall、误拆分率和子问题解决率。每份报告同时记录
-检索配置、Embedding 实现和数据集版本，后续可以对
-关键词检索、当前哈希向量、真实 Embedding 和 reranker 做同集 A/B。全量报告还会分别汇总 dev
-和 holdout，并为失败用例保存命中分数、缺失来源和明确失败原因。
-
-2026-08-22 在本地 Docker PostgreSQL + pgvector 上的同集 A/B：
-
-| 检索配置（100 条） | 通过 | Recall@3 | MRR | nDCG@5 | No-answer | Hard-negative 命中 |
-|---|---:|---:|---:|---:|---:|---:|
-| Hash test double 基线 | 83% | 91.40% | 94.09% | 92.11% | 85.71% | 6.17% |
-| BGE-small-zh + 关键词 + RRF | 88% | 91.40% | 94.09% | 92.11% | 100% | 1.23% |
-| BGE + RRF + Query Decomposition | **96%** | **95.70%** | **95.70%** | **95.21%** | 100% | **0%** |
-
-这组结果表明：在当前只有 28 个短切片的语料上，真实 Embedding 的主要价值是减少无答案误召回和
-相似但错误的政策命中，而非显著提高已被关键词通道主导的排序指标。纯向量对照在 dev/holdout 仅有
-57.33%/60.00% 通过率，所以保留关键词精确匹配和 RRF，并只用 dev 校准 0.65 绝对阈值与 0.95
-相对阈值。Query Decomposition 则把 7 条复合问题全部正确拆分并解决，两项意图指标均为 100%，
-非复合问题误拆分率为 0；冻结的 holdout 通过率由 92% 提升到 96%。加入否定意图 normalization
-后，全量 Recall@3 95.70%，首次通过所有检索质量门。人工 Review 进一步消除了模糊标注：明确
-`refund_008` 的质量问题语境，补充财务信息不可披露边界，并把“物流慢”对应的停滞规则从 hard
-negative 调整为弱相关 1。最终 nDCG@5 为 95.21%、hard-negative 命中率为 0%，剩余 4 条失败
-仍集中在单意图的相邻政策排序，后续优先用 reranker 处理。
-
-评测 API：
-
-- `POST /api/v1/evaluations/runs`
-- `GET /api/v1/evaluations/runs`
-- `GET /api/v1/evaluations/runs/{run_id}`
-
-## Trace 与可观测性
-
-每次 Agent turn 都会创建一个 `agent_trace`，并用显式 `event_index` 记录：请求、每次模型调用、
-每次工具调用、最终回复或错误。Trace 汇总模型和 Prompt 版本、model/tool 调用次数、输入输出
-token、首个模型响应、总延迟和估算成本。事件中的常见 API key、邮箱、手机号、地址、收件人和
-物流单号字段会脱敏。
-
-按店铺查看最近 Trace 或单次完整时间线：
-
-```bash
-curl \
-  -H 'X-Tenant-Id: 8741aaf7-d17d-523d-9f6a-f534109d7848' \
-  -H 'X-Store-Id: 46267c0e-11d5-5634-9629-07f8f307c42d' \
-  http://localhost:8000/api/v1/traces
-```
-
-- `GET /api/v1/traces`
-- `GET /api/v1/traces/{trace_id}`
-
-Web 控制台提供“审批 / Trace / 评测”三个视图。Trace 视图展示稳定排序的事件时间线；评测视图
-展示历史运行、汇总指标和失败用例，并可从失败用例直接跳转到对应 Trace。
-
-### 可选：切换到其他 OpenAI-compatible Provider
-
-```dotenv
-MODEL_PROVIDER=openai_compatible
-MODEL_NAME=<provider-model-name>
-MODEL_BASE_URL=https://api.openai.com/v1
-MODEL_API_KEY=<provider-api-key>
-MODEL_INPUT_COST_PER_MILLION=<input-token-price>
-MODEL_OUTPUT_COST_PER_MILLION=<output-token-price>
-```
-
-适配层使用 Chat Completions 风格的 `messages`、`tools` 和 `tool_calls` 契约；Runtime、
-工具注册表和业务服务不依赖具体模型 SDK。
-
-重置为完全一致的 Demo 数据状态（包括清空审批、退款和优惠券记录）：
-
-```bash
-make reset-demo
-```
+本项目使用 [MIT License](./LICENSE)。

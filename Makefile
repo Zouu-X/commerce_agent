@@ -1,9 +1,10 @@
-.PHONY: up down logs smoke test lint frontend-install seed reindex reset-demo migrate eval eval-mock eval-retrieval
+.PHONY: up down logs smoke test lint frontend-install seed reindex reset-demo migrate eval eval-mock eval-retrieval python-lock
 
 DOCKER ?= docker
 API_URL ?= http://localhost:8000
 WEB_URL ?= http://localhost:5173
 RETRIEVAL_SPLIT ?= all
+PYTHON_LOCK_IMAGE ?= commerce-agent-python-lock
 
 up:
 	$(DOCKER) compose up --build --detach --wait
@@ -59,3 +60,18 @@ test:
 lint:
 	$(DOCKER) build --target test backend
 	npm --prefix frontend run lint
+
+# pyproject.toml owns the allowed dependency ranges. This target resolves the
+# dev + embedding union into exact CPython 3.12/Linux pins consumed by CI and Docker.
+python-lock:
+	$(DOCKER) build --target lock --tag $(PYTHON_LOCK_IMAGE) backend
+	$(DOCKER) run --rm \
+		--mount type=bind,source="$(CURDIR)/backend",target=/workspace \
+		$(PYTHON_LOCK_IMAGE) \
+		--upgrade \
+		--resolver=backtracking \
+		--strip-extras \
+		--extra=dev \
+		--extra=embedding \
+		--output-file=requirements-py312-linux.lock \
+		pyproject.toml
