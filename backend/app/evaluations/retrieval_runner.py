@@ -21,7 +21,7 @@ from app.knowledge.service import (
 )
 
 DATASET_NAME = "commerce-rag-retrieval"
-DATASET_VERSION = "retrieval-gold-v1.1-intents"
+DATASET_VERSION = "retrieval-gold-v1.2-human-review"
 RETRIEVAL_CONFIG_VERSION = "hybrid-rrf-v3-query-decomposition"
 
 
