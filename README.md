@@ -336,7 +336,7 @@ curl \
 
 ### Retrieval Gold Set
 
-Agent 端到端评测之外，项目还维护独立的 `retrieval-gold-v1.1-intents`。它以稳定的
+Agent 端到端评测之外，项目还维护独立的 `retrieval-gold-v1.2-human-review`。它以稳定的
 `source_key:version` 为判断单位，不依赖可能随切片策略变化的 `chunk-N`；原始命中仍会保留完整
 `citation_id` 供诊断。100 条用例固定拆分为 75 条 dev 和 25 条 holdout，覆盖：
 
@@ -361,15 +361,17 @@ Recall@1/3/5、Precision@3、MRR、nDCG@5、无答案误召回率、hard-negativ
 |---|---:|---:|---:|---:|---:|---:|
 | Hash test double 基线 | 83% | 91.40% | 94.09% | 92.11% | 85.71% | 6.17% |
 | BGE-small-zh + 关键词 + RRF | 88% | 91.40% | 94.09% | 92.11% | 100% | 1.23% |
-| BGE + RRF + Query Decomposition | **95%** | **95.70%** | **95.16%** | **95.12%** | 100% | 1.23% |
+| BGE + RRF + Query Decomposition | **96%** | **95.70%** | **95.70%** | **95.21%** | 100% | **0%** |
 
 这组结果表明：在当前只有 28 个短切片的语料上，真实 Embedding 的主要价值是减少无答案误召回和
 相似但错误的政策命中，而非显著提高已被关键词通道主导的排序指标。纯向量对照在 dev/holdout 仅有
 57.33%/60.00% 通过率，所以保留关键词精确匹配和 RRF，并只用 dev 校准 0.65 绝对阈值与 0.95
 相对阈值。Query Decomposition 则把 7 条复合问题全部正确拆分并解决，两项意图指标均为 100%，
 非复合问题误拆分率为 0；冻结的 holdout 通过率由 92% 提升到 96%。加入否定意图 normalization
-后，全量 Recall@3 95.70%、nDCG@5 95.12%，首次通过所有检索质量门。剩余 5 条失败仍集中在
-单意图的相邻政策排序，后续优先用 reranker 处理。
+后，全量 Recall@3 95.70%，首次通过所有检索质量门。人工 Review 进一步消除了模糊标注：明确
+`refund_008` 的质量问题语境，补充财务信息不可披露边界，并把“物流慢”对应的停滞规则从 hard
+negative 调整为弱相关 1。最终 nDCG@5 为 95.21%、hard-negative 命中率为 0%，剩余 4 条失败
+仍集中在单意图的相邻政策排序，后续优先用 reranker 处理。
 
 评测 API：
 
