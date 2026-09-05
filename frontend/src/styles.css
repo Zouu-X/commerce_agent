@@ -1309,3 +1309,11 @@ select:focus {
     flex-direction: column;
   }
 }
+
+.evaluation-detail pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 32rem;
+  overflow: auto;
+  font-size: 0.8rem;
+}

@@ -1,5 +1,8 @@
 # Commerce Support Agent
 
+> Agent 默认评测已重构为 21 个状态化场景：隔离数据库、多轮用户状态机、真实并发和确定性判分。
+> 时间与 Token 只记录、不评分。下文 60-case 成绩是历史基线；当前设计见 [评测文档](./docs/evaluation.md)。
+
 [![CI](https://github.com/Zouu-X/commerce_agent/actions/workflows/ci.yml/badge.svg)](https://github.com/Zouu-X/commerce_agent/actions/workflows/ci.yml)
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)

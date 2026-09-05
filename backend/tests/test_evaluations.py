@@ -7,7 +7,7 @@ from app.agent.provider import MockCommerceProvider
 from app.agent.types import ModelResponse, ProviderMessage, ToolSpec
 from app.api.evaluations import case_response
 from app.evaluations.dataset import EvaluationCase, load_dataset
-from app.evaluations.runner import EvaluationService, EvaluationSettings, evaluate_case
+from app.evaluations.legacy_runner import EvaluationService, EvaluationSettings, evaluate_case
 from app.models import PendingAction
 
 

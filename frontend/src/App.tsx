@@ -91,6 +91,10 @@ type EvaluationCase = {
   actual_tools: string[]
   checks: Record<string, boolean>
   evidence: {
+    trajectory?: unknown[]
+    telemetry?: Record<string, unknown>
+    user_simulator?: unknown[]
+    checks?: Record<string, unknown>
     expected_tools?: string[]
     actual_tools?: string[]
     expected_citations?: string[]
@@ -136,6 +140,7 @@ const statusLabels: Record<PendingAction["status"], string> = {
 }
 
 const metricLabels: Record<string, string> = {
+  pass_rate: "场景通过率",
   execution_success_rate: "执行成功率",
   tool_selection_accuracy: "工具选择准确率",
   necessary_tool_recall: "必要工具召回率",
@@ -152,6 +157,7 @@ const metricLabels: Record<string, string> = {
 }
 
 const rateMetricNames = new Set([
+  "pass_rate",
   "execution_success_rate",
   "tool_selection_accuracy",
   "necessary_tool_recall",
@@ -463,7 +469,7 @@ function MerchantConsole() {
               ? "Agent 只能提出退款、发券和取消订单请求。业务数据将在人工批准并重新校验状态后才会改变。"
               : view === "traces"
                 ? "沿着一次 Agent turn 查看模型、工具、token、成本、延迟和最终结果。"
-                : "用固定数据集量化工具选择、参数、任务完成、引用和安全边界。"}
+                : "用隔离场景验证正确的工具调用、审批流程和最终数据库状态。"}
           </p>
         </div>
         <div className="hero-metric">
@@ -643,7 +649,7 @@ function MerchantConsole() {
               </p>
             </div>
             <button className="approve" disabled={runningEvaluation || !runtime} onClick={() => void runEvaluation()} type="button">
-              {runningEvaluation ? `正在运行 ${runtime?.evaluation_case_count ?? 60} 条用例…` : "运行完整评测"}
+              {runningEvaluation ? `正在运行 ${runtime?.evaluation_case_count ?? "全部"} 条用例…` : "运行完整评测"}
             </button>
           </div>
           <div className="run-list">
@@ -657,18 +663,37 @@ function MerchantConsole() {
                 <span className={`run-status run-status-${selectedRun.status}`}>{selectedRun.status === "succeeded" ? "执行完成" : selectedRun.status === "failed" ? "执行失败" : "运行中"}</span>
                 <div>
                   <strong>{selectedRun.metrics.quality_gate_passed === true ? "质量门禁通过" : selectedRun.metrics.quality_gate_passed === false ? "质量门禁未通过" : "质量门禁无适用指标"}</strong>
-                  <small>执行状态与回答质量分开判定 · {selectedRun.dataset_version} / {selectedRun.prompt_version}</small>
+                  <small>以工具契约与数据库状态判分 · {selectedRun.dataset_version} / {selectedRun.prompt_version}</small>
                 </div>
               </div>
               <div className="metric-grid">
                 {Object.entries(metricLabels).filter(([name]) => name in selectedRun.metrics).map(([name, label]) => <div key={name}><span>{label}</span><strong>{formatMetric(name, selectedRun.metrics[name])}</strong></div>)}
               </div>
+              {selectedRun.metrics.telemetry != null && (
+                <details><summary>运行记录（时间、Token、费用不参与评分）</summary><pre>{JSON.stringify(selectedRun.metrics.telemetry, null, 2)}</pre></details>
+              )}
+              {selectedRun.metrics.categories != null && (
+                <details><summary>按场景分类的通过情况</summary><pre>{JSON.stringify(selectedRun.metrics.categories, null, 2)}</pre></details>
+              )}
               <h2>失败用例</h2>
               <div className="case-list">
                 {selectedRun.cases?.filter((item) => !item.passed).map((item) => <article key={item.case_id}><div><strong>{item.case_id}</strong><p>{item.input}</p><small>{item.failures.join(" · ")} · tools: {item.actual_tools.join(", ") || "none"}</small><details><summary>查看判分证据</summary><code>{JSON.stringify(item.evidence, null, 2)}</code></details></div>{item.trace_id && item.trace_tenant_id && item.trace_store_id && <button onClick={() => item.trace_id && item.trace_tenant_id && item.trace_store_id && showTraceFromEvaluation(item.trace_id, item.trace_tenant_id, item.trace_store_id)} type="button">查看 Trace</button>}</article>)}
                 {selectedRun.cases?.every((item) => item.passed) && <p className="muted">全部用例通过。</p>}
               </div>
-              <h2>Citation 判分证据</h2>
+              {selectedRun.cases?.some((item) => item.evidence.trajectory) && <>
+                <h2>全部场景与执行轨迹</h2>
+                <p className="muted">每个场景独立初始化测试数据；保留对话、工具调用、审批与数据库前后状态。模拟用户的 LLM 只负责表达，判分全部由确定性验证完成。</p>
+                <div className="case-list">
+                  {selectedRun.cases?.map((item) => <article key={item.case_id}><div>
+                    <strong>{item.case_id} · {item.passed ? "通过" : "未通过"}</strong><p>{item.input}</p>
+                    <details><summary>判分检查</summary><pre>{JSON.stringify(item.checks, null, 2)}</pre></details>
+                    <details><summary>Trajectory（含每轮完整对话和审批）</summary><pre>{JSON.stringify(item.evidence.trajectory, null, 2)}</pre></details>
+                    <details><summary>用户状态机</summary><pre>{JSON.stringify(item.evidence.user_simulator, null, 2)}</pre></details>
+                    <details><summary>数据库与完整证据</summary><pre>{JSON.stringify(item.evidence, null, 2)}</pre></details>
+                  </div></article>)}
+                </div>
+              </>}
+              {!!citationEvidenceCases.length && <><h2>Citation 判分证据（历史评测）</h2>
               <p className="muted">同时展示“是否引用”与“是否引用了正确切片”，避免格式正确但证据错误。</p>
               <div className="evidence-grid">
                 {citationEvidenceCases.map((item) => (
@@ -684,7 +709,7 @@ function MerchantConsole() {
                     {item.trace_id && item.trace_tenant_id && item.trace_store_id && <button onClick={() => item.trace_id && item.trace_tenant_id && item.trace_store_id && showTraceFromEvaluation(item.trace_id, item.trace_tenant_id, item.trace_store_id)} type="button">沿 Trace 查看来源</button>}
                   </article>
                 ))}
-              </div>
+              </div></>}
             </div>
           )}
         </section>
