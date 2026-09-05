@@ -5,6 +5,7 @@ API_URL ?= http://localhost:8000
 WEB_URL ?= http://localhost:5173
 RETRIEVAL_SPLIT ?= all
 PYTHON_LOCK_IMAGE ?= commerce-agent-python-lock
+EVAL_ARGS ?=
 
 up:
 	$(DOCKER) compose up --build --detach --wait
@@ -39,11 +40,11 @@ reset-demo: seed
 
 eval:
 	$(DOCKER) compose build api
-	$(DOCKER) compose run --rm api sh -c "alembic upgrade head && python -m app.commerce.seed && python -m app.knowledge.reindex && python -m app.evaluations.cli --output-dir /app/eval-results"
+	$(DOCKER) compose run --rm api sh -c "alembic upgrade head && python -m app.evaluations.cli --output-dir /app/eval-results $(EVAL_ARGS)"
 
 eval-mock:
 	$(DOCKER) compose build api
-	MODEL_PROVIDER=mock MODEL_NAME=mock-commerce-agent MODEL_INPUT_COST_PER_MILLION=0 MODEL_OUTPUT_COST_PER_MILLION=0 $(DOCKER) compose run --rm api sh -c "alembic upgrade head && python -m app.commerce.seed && python -m app.knowledge.reindex && python -m app.evaluations.cli --output-dir /app/eval-results"
+	MODEL_PROVIDER=mock MODEL_NAME=mock-commerce-agent MODEL_INPUT_COST_PER_MILLION=0 MODEL_OUTPUT_COST_PER_MILLION=0 $(DOCKER) compose run --rm api sh -c "alembic upgrade head && python -m app.evaluations.cli --output-dir /app/eval-results $(EVAL_ARGS)"
 
 eval-retrieval:
 	$(DOCKER) compose build api

@@ -10,12 +10,13 @@ from app.api.dependencies import get_model_provider
 from app.core.config import get_settings
 from app.db.session import SessionFactory
 from app.evaluations.runner import EvaluationService, EvaluationSettings
+from app.evaluations.scenarios import load_scenarios
 from app.models import EvaluationRun
 
 
 def report_payload(run: EvaluationRun) -> dict[str, Any]:
     return {
-        "schema_version": "1.1",
+        "schema_version": "2.0",
         "run": {
             "id": str(run.id),
             "status": run.status,
@@ -51,7 +52,17 @@ def report_payload(run: EvaluationRun) -> dict[str, Any]:
 async def async_main() -> None:
     parser = argparse.ArgumentParser(description="Run the Commerce Agent offline evaluation")
     parser.add_argument("--output-dir", default="eval-results")
+    parser.add_argument(
+        "--case", action="append", default=[], help="Select scenario ID (repeatable)"
+    )
+    parser.add_argument("--simulator", choices=["auto", "template", "llm"], default="auto")
     args = parser.parse_args()
+    cases = load_scenarios()
+    if args.case:
+        unknown = set(args.case) - {c.case_id for c in cases}
+        if unknown:
+            parser.error(f"unknown cases: {sorted(unknown)}")
+        cases = [c for c in cases if c.case_id in args.case]
     settings = get_settings()
     provider = await get_model_provider()
     async with SessionFactory() as session:
@@ -60,11 +71,12 @@ async def async_main() -> None:
             provider,
             EvaluationSettings(
                 provider_name=settings.model_provider,
+                simulator_mode=args.simulator,
                 model_name=settings.model_name,
                 input_cost_per_million=settings.model_input_cost_per_million,
                 output_cost_per_million=settings.model_output_cost_per_million,
             ),
-        ).run()
+        ).run(cases)
     payload = report_payload(run)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -72,8 +84,10 @@ async def async_main() -> None:
     report_path = output_dir / f"evaluation-{run.id}.json"
     report_path.write_text(serialized + "\n", encoding="utf-8")
     (output_dir / "latest.json").write_text(serialized + "\n", encoding="utf-8")
-    print(serialized)
+    print(json.dumps({"run": payload["run"], "metrics": payload["metrics"]}, ensure_ascii=False))
     print(f"report={report_path}")
+    if not run.metrics_json["quality_gate_passed"]:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

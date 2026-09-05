@@ -17,6 +17,7 @@ from app.commerce.services import (
 )
 from app.core.config import get_settings
 from app.db.session import get_db_session
+from app.evaluations.scenarios import load_scenarios
 from app.models import Customer, Order, Product, ProductVariant, Shipment, Store, Tenant
 from app.schemas.commerce import (
     AfterSaleRead,
@@ -47,7 +48,7 @@ async def get_demo_runtime() -> DemoRuntimeRead:
             "non-thinking" if settings.model_provider == "deepseek" else "provider-default"
         ),
         uses_external_api=settings.model_provider != "mock",
-        evaluation_case_count=60,
+        evaluation_case_count=len(load_scenarios()),
         input_cost_per_million=settings.model_input_cost_per_million,
         output_cost_per_million=settings.model_output_cost_per_million,
     )

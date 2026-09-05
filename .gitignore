@@ -16,3 +16,6 @@ frontend/dist/
 htmlcov/
 eval-results/*.json
 logs/
+
+# Keep raw per-run reports local, including custom --output-dir subdirectories.
+eval-results/**/*.json

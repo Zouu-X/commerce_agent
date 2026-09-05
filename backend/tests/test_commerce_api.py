@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.commerce.seed import stable_id
 from app.db.session import get_db_session
+from app.evaluations.scenarios import load_scenarios
 from app.main import app
 
 
@@ -80,7 +81,7 @@ async def test_demo_runtime_discloses_safe_model_and_evaluation_metadata() -> No
         "model_name": "mock-commerce-agent",
         "model_mode": "provider-default",
         "uses_external_api": False,
-        "evaluation_case_count": 60,
+        "evaluation_case_count": len(load_scenarios()),
         "input_cost_per_million": "0.14",
         "output_cost_per_million": "0.28",
     }
