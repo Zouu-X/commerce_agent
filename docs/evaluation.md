@@ -141,6 +141,8 @@ Trace events、审批轨迹、数据库 before/after 和各步骤的变化。隔
 - [Retrieval Gold Set 基线](./evals/retrieval-baseline-7e8a925.md)：独立检索评测，96/100，不经过生成 Agent。
 - [新版 21-case 验收基线](./evals/stateful-agent-v2-20260905.md)：Mock 17/21，DeepSeek 15/21，保留真实失败。
 - [本次重构说明与失败分析](../logs/milestone-11-stateful-agent-evaluation.md)。
+- [取消流程 Prompt v9 复测](../logs/milestone-13-cancellation-prompt.md)：DeepSeek 全量 19/21，
+  两个目标各 3/3，单轮全量未观察到新增失败；包含前序订单行锁修复。
 
 Milestone 11 没有把改进 Agent 行为或修复业务幂等逻辑混入评测重构；上述 21-case 基线保留原始结果。
 后续 Milestone 12 独立修复了取消申请并发去重，定向 Mock eval 为 1/1（22 项检查通过），

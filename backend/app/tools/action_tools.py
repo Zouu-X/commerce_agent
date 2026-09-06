@@ -17,7 +17,12 @@ class ActionToolArguments(BaseModel):
 
 class RequestOrderCancellationArgs(ActionToolArguments):
     order_number: str = Field(min_length=1, max_length=40)
-    reason: str = Field(min_length=1, max_length=500)
+    reason: str = Field(
+        min_length=1,
+        max_length=500,
+        description="忠实概括用户在当前消息或对话历史中说明的取消原因，例如不想要了、误拍。"
+        "已有原因不必重复询问，未提供的原因不得编造。",
+    )
 
 
 class RequestRefundArgs(ActionToolArguments):

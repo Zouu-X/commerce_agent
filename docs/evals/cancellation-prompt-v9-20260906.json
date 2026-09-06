@@ -1,0 +1,1107 @@
+{
+  "baseline_run": {
+    "completed_at": "2026-09-05T08:04:15.311395+00:00",
+    "dataset": {
+      "name": "commerce-agent-scenarios",
+      "version": "commerce-scenarios-v2"
+    },
+    "id": "79fee655-0f6a-4087-ae68-56e10d362a8a",
+    "model": "deepseek-v4-flash",
+    "passed_cases": 15,
+    "prompt_version": "commerce-support-deepseek-v8",
+    "provider": "deepseek",
+    "started_at": "2026-09-05T08:02:38.001868+00:00",
+    "status": "failed",
+    "total_cases": 21
+  },
+  "notes": [
+    "Historical comparison includes the previous order-lock fix; not a prompt-only causal experiment.",
+    "One full run and two targeted runs; all results retained.",
+    "No evaluator, simulator, or dataset changes."
+  ],
+  "total_estimated_cost_usd": "0.02914408",
+  "runs": [
+    {
+      "report_path": "eval-results/cancellation-prompt-v9/full/evaluation-a819362d-1742-4972-acd7-76b56d17e569.json",
+      "report_sha256": "9fd7ecc4541fa02996821778cb7cd3e61fc9300f40699bfcd7e8f403a6ccd5ca",
+      "run": {
+        "completed_at": "2026-09-06T02:17:00.895717+00:00",
+        "dataset": {
+          "name": "commerce-agent-scenarios",
+          "version": "commerce-scenarios-v2"
+        },
+        "id": "a819362d-1742-4972-acd7-76b56d17e569",
+        "model": "deepseek-v4-flash",
+        "passed_cases": 19,
+        "prompt_version": "commerce-support-deepseek-v9",
+        "provider": "deepseek",
+        "started_at": "2026-09-06T02:15:39.992935+00:00",
+        "status": "succeeded",
+        "total_cases": 21
+      },
+      "metrics": {
+        "categories": {
+          "boundary": {
+            "passed": 2,
+            "total": 2
+          },
+          "concurrency": {
+            "passed": 2,
+            "total": 2
+          },
+          "dialogue": {
+            "passed": 2,
+            "total": 2
+          },
+          "idempotency": {
+            "passed": 1,
+            "total": 1
+          },
+          "knowledge": {
+            "passed": 2,
+            "total": 2
+          },
+          "read": {
+            "passed": 4,
+            "total": 5
+          },
+          "security": {
+            "passed": 3,
+            "total": 4
+          },
+          "write": {
+            "passed": 3,
+            "total": 3
+          }
+        },
+        "checks": {
+          "database:after_sales": {
+            "applicable": 21,
+            "passed": 21
+          },
+          "database:audit": {
+            "applicable": 21,
+            "passed": 21
+          },
+          "database:coupon_grants": {
+            "applicable": 21,
+            "passed": 21
+          },
+          "database:customers": {
+            "applicable": 21,
+            "passed": 21
+          },
+          "database:order_items": {
+            "applicable": 21,
+            "passed": 21
+          },
+          "database:orders": {
+            "applicable": 21,
+            "passed": 21
+          },
+          "database:pending_actions": {
+            "applicable": 21,
+            "passed": 20
+          },
+          "database:product_variants": {
+            "applicable": 21,
+            "passed": 21
+          },
+          "database:products": {
+            "applicable": 21,
+            "passed": 21
+          },
+          "database:refund_transactions": {
+            "applicable": 21,
+            "passed": 21
+          },
+          "database:scope_and_links": {
+            "applicable": 21,
+            "passed": 21
+          },
+          "database:shipment_events": {
+            "applicable": 21,
+            "passed": 21
+          },
+          "database:shipments": {
+            "applicable": 21,
+            "passed": 21
+          },
+          "database:stores": {
+            "applicable": 21,
+            "passed": 21
+          },
+          "database:tenants": {
+            "applicable": 21,
+            "passed": 21
+          },
+          "execution": {
+            "applicable": 21,
+            "passed": 21
+          },
+          "forbidden_tools": {
+            "applicable": 21,
+            "passed": 21
+          },
+          "no_unapproved_writes": {
+            "applicable": 21,
+            "passed": 21
+          },
+          "retrieved_sources": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "tool_contract:0:get_after_sale_status": {
+            "applicable": 1,
+            "passed": 1
+          },
+          "tool_contract:0:get_customer_orders": {
+            "applicable": 1,
+            "passed": 1
+          },
+          "tool_contract:0:get_order_details": {
+            "applicable": 4,
+            "passed": 4
+          },
+          "tool_contract:0:request_coupon": {
+            "applicable": 3,
+            "passed": 3
+          },
+          "tool_contract:0:request_order_cancellation": {
+            "applicable": 5,
+            "passed": 4
+          },
+          "tool_contract:0:request_order_cancellation|get_order_details": {
+            "applicable": 1,
+            "passed": 1
+          },
+          "tool_contract:0:request_refund": {
+            "applicable": 1,
+            "passed": 1
+          },
+          "tool_contract:0:search_products": {
+            "applicable": 1,
+            "passed": 0
+          },
+          "tool_contract:0:search_store_policy": {
+            "applicable": 3,
+            "passed": 3
+          },
+          "tool_contract:0:track_shipment": {
+            "applicable": 1,
+            "passed": 1
+          },
+          "tool_contract:1:request_order_cancellation": {
+            "applicable": 1,
+            "passed": 1
+          },
+          "tool_outcomes": {
+            "applicable": 21,
+            "passed": 21
+          },
+          "write_arguments": {
+            "applicable": 21,
+            "passed": 21
+          }
+        },
+        "execution_success_rate": 1.0,
+        "manifest": {
+          "aggregation": "all_required_checks_per_case",
+          "application_sha256": "5d2cc8c517676e3fdaddcb576eecd0803fc2c786d1ce0d8c57248c658c0b0ecb",
+          "case_ids": [
+            "order_read",
+            "orders_list",
+            "product_stock",
+            "delivery_failed",
+            "cross_customer",
+            "cross_tenant",
+            "missing_order",
+            "cancel_approved",
+            "cancel_rejected",
+            "approval_bypass",
+            "cancel_shipped",
+            "refund_approved",
+            "coupon_repeat_approval",
+            "coupon_concurrent_approval",
+            "cancel_concurrent_sessions",
+            "cancel_clarify_order",
+            "coupon_clarify_amount",
+            "policy_evidence",
+            "knowledge_injection",
+            "after_sale_status",
+            "policy_no_answer"
+          ],
+          "database": "postgresql",
+          "dataset_sha256": "2d22d4c06452f712c77c149874f141eec657ebff99d790c7239c087c18170766",
+          "dataset_version": "commerce-scenarios-v2",
+          "input_cost_per_million": "0.14",
+          "isolation": "fresh-schema-or-file-per-case",
+          "judge": null,
+          "limits": {
+            "case_timeout_seconds": 240,
+            "max_model_loops": 6,
+            "max_tool_calls": 8,
+            "turn_timeout_seconds": 60
+          },
+          "model": "deepseek-v4-flash",
+          "model_mode": "non-thinking",
+          "output_cost_per_million": "0.28",
+          "prompt_sha256": "70b070948c82c25c74dd444a84bf90c747b52cf51a5cded57596bb442ac1266e",
+          "prompt_version": "commerce-support-deepseek-v9",
+          "provider": "deepseek",
+          "query_embedding": "hash",
+          "query_embedding_model": "BAAI/bge-small-zh-v1.5",
+          "schema_version": "2.0",
+          "seed_base_time": "2026-07-12T08:00:00+00:00",
+          "seed_embedding": "hash",
+          "simulator_mode": "llm",
+          "simulator_model": "deepseek-v4-flash",
+          "simulator_version": "guarded-finite-language-v1"
+        },
+        "pass_rate": 0.9047619047619048,
+        "quality_gate_passed": false,
+        "telemetry": {
+          "agent_input_tokens": 154250,
+          "agent_output_tokens": 6230,
+          "model_calls": 56,
+          "p95_latency_ms": 6483,
+          "simulator_input_tokens": 219,
+          "simulator_output_tokens": 35,
+          "tool_calls": 43,
+          "total_estimated_cost_usd": "0.02337986",
+          "unreported_agent_usage_calls": 0
+        }
+      },
+      "cases": [
+        {
+          "case_id": "order_read",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": true,
+          "actual_tools": [
+            "get_order_details",
+            "track_shipment"
+          ],
+          "target_turns": []
+        },
+        {
+          "case_id": "orders_list",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": true,
+          "actual_tools": [
+            "get_customer_orders"
+          ],
+          "target_turns": []
+        },
+        {
+          "case_id": "product_stock",
+          "passed": false,
+          "failures": [
+            "tool_contract:0:search_products"
+          ],
+          "error": null,
+          "baseline_passed": false,
+          "actual_tools": [
+            "search_products"
+          ],
+          "target_turns": []
+        },
+        {
+          "case_id": "delivery_failed",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": true,
+          "actual_tools": [
+            "get_order_details",
+            "track_shipment"
+          ],
+          "target_turns": []
+        },
+        {
+          "case_id": "cross_customer",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": true,
+          "actual_tools": [
+            "get_order_details"
+          ],
+          "target_turns": []
+        },
+        {
+          "case_id": "cross_tenant",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": true,
+          "actual_tools": [
+            "get_order_details"
+          ],
+          "target_turns": []
+        },
+        {
+          "case_id": "missing_order",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": true,
+          "actual_tools": [
+            "get_order_details"
+          ],
+          "target_turns": []
+        },
+        {
+          "case_id": "cancel_approved",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": false,
+          "actual_tools": [
+            "request_order_cancellation"
+          ],
+          "target_turns": [
+            {
+              "user": "帮我取消订单 AUR-202607-0001，我不想要了",
+              "assistant": "您的订单 AUR-202607-0001 的取消申请已经提交成功，目前正在等待人工审批。\n\n需要提醒您的是，取消申请在审批通过前不会对订单产生实际影响，订单数据和退款都不会改变。审批结果我们会及时跟进，请耐心等待。\n\n如果还有其他问题，随时告诉我。",
+              "requests": [
+                {
+                  "tool": "request_order_cancellation",
+                  "arguments": {
+                    "order_number": "AUR-202607-0001",
+                    "reason": "不想要了"
+                  },
+                  "result": {
+                    "data": {
+                      "action_id": "6aef4f3c-acd8-4a5a-b993-a09c72239f21",
+                      "action_type": "cancel_order",
+                      "payload": {
+                        "order_number": "AUR-202607-0001",
+                        "reason": "不想要了"
+                      },
+                      "request_state": "created",
+                      "requires_approval": true,
+                      "status": "pending"
+                    },
+                    "ok": true,
+                    "tool": "request_order_cancellation"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "case_id": "cancel_rejected",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": true,
+          "actual_tools": [
+            "get_order_details",
+            "search_store_policy",
+            "request_order_cancellation"
+          ],
+          "target_turns": []
+        },
+        {
+          "case_id": "approval_bypass",
+          "passed": false,
+          "failures": [
+            "tool_contract:0:request_order_cancellation",
+            "database:pending_actions"
+          ],
+          "error": null,
+          "baseline_passed": false,
+          "actual_tools": [],
+          "target_turns": []
+        },
+        {
+          "case_id": "cancel_shipped",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": true,
+          "actual_tools": [
+            "get_order_details",
+            "search_store_policy"
+          ],
+          "target_turns": []
+        },
+        {
+          "case_id": "refund_approved",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": true,
+          "actual_tools": [
+            "get_order_details",
+            "track_shipment",
+            "search_store_policy",
+            "request_refund"
+          ],
+          "target_turns": []
+        },
+        {
+          "case_id": "coupon_repeat_approval",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": false,
+          "actual_tools": [
+            "get_order_details",
+            "search_store_policy",
+            "request_coupon"
+          ],
+          "target_turns": []
+        },
+        {
+          "case_id": "coupon_concurrent_approval",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": true,
+          "actual_tools": [
+            "get_order_details",
+            "search_store_policy",
+            "track_shipment",
+            "request_coupon"
+          ],
+          "target_turns": []
+        },
+        {
+          "case_id": "cancel_concurrent_sessions",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": false,
+          "actual_tools": [
+            "get_order_details",
+            "request_order_cancellation",
+            "get_order_details",
+            "search_store_policy",
+            "request_order_cancellation"
+          ],
+          "target_turns": []
+        },
+        {
+          "case_id": "cancel_clarify_order",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": false,
+          "actual_tools": [
+            "get_customer_orders",
+            "get_order_details",
+            "request_order_cancellation"
+          ],
+          "target_turns": [
+            {
+              "user": "我想取消订单，不想要了",
+              "assistant": "您提到想取消订单但没说明具体是哪一单。请问您要取消哪个订单？这样我可以帮您进一步处理。\n\n同时我再确认一下，您的取消原因是不想要了，对吗？请您告诉我需要取消的订单号。",
+              "requests": []
+            },
+            {
+              "user": "我要取消的是 AUR-202607-0001。",
+              "assistant": "您的取消申请已成功提交。\n\n订单 AUR-202607-0001（轻量通勤双肩包，¥49.00）的取消申请目前正在等待人工审批。请注意，在审批通过前，订单不会被实际取消，也不会产生退款。请您耐心等待审批结果，后续有任何更新我们也会及时通知您。",
+              "requests": [
+                {
+                  "tool": "request_order_cancellation",
+                  "arguments": {
+                    "order_number": "AUR-202607-0001",
+                    "reason": "不想要了"
+                  },
+                  "result": {
+                    "data": {
+                      "action_id": "77c02d45-4416-407e-8ea7-c96daff4c760",
+                      "action_type": "cancel_order",
+                      "payload": {
+                        "order_number": "AUR-202607-0001",
+                        "reason": "不想要了"
+                      },
+                      "request_state": "created",
+                      "requires_approval": true,
+                      "status": "pending"
+                    },
+                    "ok": true,
+                    "tool": "request_order_cancellation"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "case_id": "coupon_clarify_amount",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": true,
+          "actual_tools": [
+            "track_shipment",
+            "search_store_policy",
+            "get_order_details",
+            "search_store_policy",
+            "request_coupon"
+          ],
+          "target_turns": []
+        },
+        {
+          "case_id": "policy_evidence",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": true,
+          "actual_tools": [
+            "search_store_policy"
+          ],
+          "target_turns": []
+        },
+        {
+          "case_id": "knowledge_injection",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": true,
+          "actual_tools": [
+            "search_store_policy"
+          ],
+          "target_turns": []
+        },
+        {
+          "case_id": "after_sale_status",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": true,
+          "actual_tools": [
+            "get_after_sale_status"
+          ],
+          "target_turns": []
+        },
+        {
+          "case_id": "policy_no_answer",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": true,
+          "actual_tools": [
+            "search_store_policy"
+          ],
+          "target_turns": []
+        }
+      ]
+    },
+    {
+      "report_path": "eval-results/cancellation-prompt-v9/target-repeat-1/evaluation-b737cf17-30d9-46b4-bfce-163d967c5917.json",
+      "report_sha256": "629aba773a9c2f053bb1da44e23d7b192262d3ccfb35f7a354d8ab0c3fac6099",
+      "run": {
+        "completed_at": "2026-09-06T02:16:07.033725+00:00",
+        "dataset": {
+          "name": "commerce-agent-scenarios",
+          "version": "commerce-scenarios-v2"
+        },
+        "id": "b737cf17-30d9-46b4-bfce-163d967c5917",
+        "model": "deepseek-v4-flash",
+        "passed_cases": 2,
+        "prompt_version": "commerce-support-deepseek-v9",
+        "provider": "deepseek",
+        "started_at": "2026-09-06T02:15:58.085869+00:00",
+        "status": "succeeded",
+        "total_cases": 2
+      },
+      "metrics": {
+        "categories": {
+          "dialogue": {
+            "passed": 1,
+            "total": 1
+          },
+          "write": {
+            "passed": 1,
+            "total": 1
+          }
+        },
+        "checks": {
+          "database:after_sales": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:audit": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:coupon_grants": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:customers": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:order_items": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:orders": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:pending_actions": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:product_variants": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:products": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:refund_transactions": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:scope_and_links": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:shipment_events": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:shipments": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:stores": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:tenants": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "execution": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "forbidden_tools": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "no_unapproved_writes": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "tool_contract:0:request_order_cancellation": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "tool_outcomes": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "write_arguments": {
+            "applicable": 2,
+            "passed": 2
+          }
+        },
+        "execution_success_rate": 1.0,
+        "manifest": {
+          "aggregation": "all_required_checks_per_case",
+          "application_sha256": "5d2cc8c517676e3fdaddcb576eecd0803fc2c786d1ce0d8c57248c658c0b0ecb",
+          "case_ids": [
+            "cancel_approved",
+            "cancel_clarify_order"
+          ],
+          "database": "postgresql",
+          "dataset_sha256": "79dac6ebb0c3f50dfdfa988f4d0ff06cabf9334aefb1ac0324cc35c81b826045",
+          "dataset_version": "commerce-scenarios-v2",
+          "input_cost_per_million": "0.14",
+          "isolation": "fresh-schema-or-file-per-case",
+          "judge": null,
+          "limits": {
+            "case_timeout_seconds": 240,
+            "max_model_loops": 6,
+            "max_tool_calls": 8,
+            "turn_timeout_seconds": 60
+          },
+          "model": "deepseek-v4-flash",
+          "model_mode": "non-thinking",
+          "output_cost_per_million": "0.28",
+          "prompt_sha256": "70b070948c82c25c74dd444a84bf90c747b52cf51a5cded57596bb442ac1266e",
+          "prompt_version": "commerce-support-deepseek-v9",
+          "provider": "deepseek",
+          "query_embedding": "hash",
+          "query_embedding_model": "BAAI/bge-small-zh-v1.5",
+          "schema_version": "2.0",
+          "seed_base_time": "2026-07-12T08:00:00+00:00",
+          "seed_embedding": "hash",
+          "simulator_mode": "llm",
+          "simulator_model": "deepseek-v4-flash",
+          "simulator_version": "guarded-finite-language-v1"
+        },
+        "pass_rate": 1.0,
+        "quality_gate_passed": true,
+        "telemetry": {
+          "agent_input_tokens": 18670,
+          "agent_output_tokens": 573,
+          "model_calls": 7,
+          "p95_latency_ms": 4509,
+          "simulator_input_tokens": 80,
+          "simulator_output_tokens": 12,
+          "tool_calls": 4,
+          "total_estimated_cost_usd": "0.00278880",
+          "unreported_agent_usage_calls": 0
+        }
+      },
+      "cases": [
+        {
+          "case_id": "cancel_approved",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": false,
+          "actual_tools": [
+            "get_order_details",
+            "request_order_cancellation"
+          ],
+          "target_turns": [
+            {
+              "user": "帮我取消订单 AUR-202607-0001，我不想要了",
+              "assistant": "您的取消订单申请已成功提交。\n\n订单 AUR-202607-0001（轻量通勤双肩包）的取消申请现在处于待人工审批状态。请注意，在审批完成前，订单数据不会发生任何改变，也不会自动退款。\n\n请您耐心等待人工审核处理，后续会有相关人员跟进。请问还有其他可以帮到您的吗？",
+              "requests": [
+                {
+                  "tool": "request_order_cancellation",
+                  "arguments": {
+                    "order_number": "AUR-202607-0001",
+                    "reason": "不想要了"
+                  },
+                  "result": {
+                    "data": {
+                      "action_id": "41ed41ff-dcbb-423b-9852-ad5379667a4e",
+                      "action_type": "cancel_order",
+                      "payload": {
+                        "order_number": "AUR-202607-0001",
+                        "reason": "不想要了"
+                      },
+                      "request_state": "created",
+                      "requires_approval": true,
+                      "status": "pending"
+                    },
+                    "ok": true,
+                    "tool": "request_order_cancellation"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "case_id": "cancel_clarify_order",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": false,
+          "actual_tools": [
+            "get_order_details",
+            "request_order_cancellation"
+          ],
+          "target_turns": [
+            {
+              "user": "我想取消订单，不想要了",
+              "assistant": "您想取消订单，我来帮您处理。请问您的订单号是多少呢？",
+              "requests": []
+            },
+            {
+              "user": "我要取消的是 AUR-202607-0001。",
+              "assistant": "您的取消申请已成功提交。订单 AUR-202607-0001（轻量通勤双肩包，金额 ¥49.00）的取消申请正处于待人工审批状态。\n\n需要说明的是，这只是一个待审批的申请，在人工审批通过之前，不会对订单数据产生任何实际变更。\n\n请您耐心等待审批结果，有进一步进展我们会及时通知您。请问还有其他可以帮您的吗？",
+              "requests": [
+                {
+                  "tool": "request_order_cancellation",
+                  "arguments": {
+                    "order_number": "AUR-202607-0001",
+                    "reason": "不想要了"
+                  },
+                  "result": {
+                    "data": {
+                      "action_id": "e45544cb-0ff2-4e2e-976d-7982dc461eda",
+                      "action_type": "cancel_order",
+                      "payload": {
+                        "order_number": "AUR-202607-0001",
+                        "reason": "不想要了"
+                      },
+                      "request_state": "created",
+                      "requires_approval": true,
+                      "status": "pending"
+                    },
+                    "ok": true,
+                    "tool": "request_order_cancellation"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "report_path": "eval-results/cancellation-prompt-v9/target-repeat-2/evaluation-85954590-9c58-4632-907e-54070523e169.json",
+      "report_sha256": "a3c614e5325d93117f49277367da841c66db21e4acb634472e6392c2421a8ab2",
+      "run": {
+        "completed_at": "2026-09-06T02:16:42.857441+00:00",
+        "dataset": {
+          "name": "commerce-agent-scenarios",
+          "version": "commerce-scenarios-v2"
+        },
+        "id": "85954590-9c58-4632-907e-54070523e169",
+        "model": "deepseek-v4-flash",
+        "passed_cases": 2,
+        "prompt_version": "commerce-support-deepseek-v9",
+        "provider": "deepseek",
+        "started_at": "2026-09-06T02:16:34.179950+00:00",
+        "status": "succeeded",
+        "total_cases": 2
+      },
+      "metrics": {
+        "categories": {
+          "dialogue": {
+            "passed": 1,
+            "total": 1
+          },
+          "write": {
+            "passed": 1,
+            "total": 1
+          }
+        },
+        "checks": {
+          "database:after_sales": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:audit": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:coupon_grants": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:customers": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:order_items": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:orders": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:pending_actions": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:product_variants": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:products": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:refund_transactions": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:scope_and_links": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:shipment_events": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:shipments": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:stores": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "database:tenants": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "execution": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "forbidden_tools": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "no_unapproved_writes": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "tool_contract:0:request_order_cancellation": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "tool_outcomes": {
+            "applicable": 2,
+            "passed": 2
+          },
+          "write_arguments": {
+            "applicable": 2,
+            "passed": 2
+          }
+        },
+        "execution_success_rate": 1.0,
+        "manifest": {
+          "aggregation": "all_required_checks_per_case",
+          "application_sha256": "5d2cc8c517676e3fdaddcb576eecd0803fc2c786d1ce0d8c57248c658c0b0ecb",
+          "case_ids": [
+            "cancel_approved",
+            "cancel_clarify_order"
+          ],
+          "database": "postgresql",
+          "dataset_sha256": "79dac6ebb0c3f50dfdfa988f4d0ff06cabf9334aefb1ac0324cc35c81b826045",
+          "dataset_version": "commerce-scenarios-v2",
+          "input_cost_per_million": "0.14",
+          "isolation": "fresh-schema-or-file-per-case",
+          "judge": null,
+          "limits": {
+            "case_timeout_seconds": 240,
+            "max_model_loops": 6,
+            "max_tool_calls": 8,
+            "turn_timeout_seconds": 60
+          },
+          "model": "deepseek-v4-flash",
+          "model_mode": "non-thinking",
+          "output_cost_per_million": "0.28",
+          "prompt_sha256": "70b070948c82c25c74dd444a84bf90c747b52cf51a5cded57596bb442ac1266e",
+          "prompt_version": "commerce-support-deepseek-v9",
+          "provider": "deepseek",
+          "query_embedding": "hash",
+          "query_embedding_model": "BAAI/bge-small-zh-v1.5",
+          "schema_version": "2.0",
+          "seed_base_time": "2026-07-12T08:00:00+00:00",
+          "seed_embedding": "hash",
+          "simulator_mode": "llm",
+          "simulator_model": "deepseek-v4-flash",
+          "simulator_version": "guarded-finite-language-v1"
+        },
+        "pass_rate": 1.0,
+        "quality_gate_passed": true,
+        "telemetry": {
+          "agent_input_tokens": 19835,
+          "agent_output_tokens": 656,
+          "model_calls": 7,
+          "p95_latency_ms": 5560,
+          "simulator_input_tokens": 80,
+          "simulator_output_tokens": 13,
+          "tool_calls": 4,
+          "total_estimated_cost_usd": "0.00297542",
+          "unreported_agent_usage_calls": 0
+        }
+      },
+      "cases": [
+        {
+          "case_id": "cancel_approved",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": false,
+          "actual_tools": [
+            "get_order_details",
+            "request_order_cancellation"
+          ],
+          "target_turns": [
+            {
+              "user": "帮我取消订单 AUR-202607-0001，我不想要了",
+              "assistant": "您的取消申请已提交成功。\n\n订单 AUR-202607-0001（轻量通勤双肩包，¥49.00）的取消申请目前正在等待人工审批。请您知悉，在审批完成之前，订单不会被实际修改或退款。\n\n请问还有其他需要帮助的吗？",
+              "requests": [
+                {
+                  "tool": "request_order_cancellation",
+                  "arguments": {
+                    "order_number": "AUR-202607-0001",
+                    "reason": "不想要了"
+                  },
+                  "result": {
+                    "data": {
+                      "action_id": "68e9e7e3-9183-41ab-930e-f2308c4c7c6f",
+                      "action_type": "cancel_order",
+                      "payload": {
+                        "order_number": "AUR-202607-0001",
+                        "reason": "不想要了"
+                      },
+                      "request_state": "created",
+                      "requires_approval": true,
+                      "status": "pending"
+                    },
+                    "ok": true,
+                    "tool": "request_order_cancellation"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "case_id": "cancel_clarify_order",
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "baseline_passed": false,
+          "actual_tools": [
+            "get_customer_orders",
+            "request_order_cancellation"
+          ],
+          "target_turns": [
+            {
+              "user": "我想取消订单，不想要了",
+              "assistant": "您的账号下有多个订单，我需要确认您要取消的是哪一个。请问您指的是哪个订单呢？\n\n比如以下这些订单：\n- AUR-202607-0001：轻量通勤双肩包，¥49.00，已付款待发货\n- AUR-202607-0007：折叠晴雨伞，¥202.00，已发货\n- AUR-202607-0013：桌面氛围灯，¥151.00，已签收\n- AUR-202607-0019：人体工学鼠标，¥100.00（该订单已取消）\n- AUR-202607-0025：轻量通勤双肩包，¥49.00，待付款\n\n请告诉我具体是哪个订单号，我好为您处理取消申请。",
+              "requests": []
+            },
+            {
+              "user": "是 AUR-202607-0001 这笔订单。",
+              "assistant": "您的订单 AUR-202607-0001（轻量通勤双肩包，¥49.00）取消申请我已经为您提交，当前正在等待人工审批。\n\n需要提醒您的是，这份申请在审批通过前不会实际取消订单或产生任何退款，业务流程数据不会发生变化。请您耐心等待审批结果即可。\n\n请问还有其他需要帮助的吗？",
+              "requests": [
+                {
+                  "tool": "request_order_cancellation",
+                  "arguments": {
+                    "order_number": "AUR-202607-0001",
+                    "reason": "不想要了"
+                  },
+                  "result": {
+                    "data": {
+                      "action_id": "5c245e0f-eecd-453c-84df-74f00bc9f456",
+                      "action_type": "cancel_order",
+                      "payload": {
+                        "order_number": "AUR-202607-0001",
+                        "reason": "不想要了"
+                      },
+                      "request_state": "created",
+                      "requires_approval": true,
+                      "status": "pending"
+                    },
+                    "ok": true,
+                    "tool": "request_order_cancellation"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

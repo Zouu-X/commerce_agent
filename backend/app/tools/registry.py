@@ -141,7 +141,9 @@ def build_tool_registry(session: AsyncSession, context: ToolContext) -> ToolRegi
     for tool in (
         RegisteredTool(
             "request_order_cancellation",
-            "请求取消当前顾客的订单。只创建待人工审批动作，不会直接取消订单。",
+            "请求取消当前顾客的订单。只创建待人工审批动作，不会直接取消订单。"
+            "用户明确要求取消、目标订单和原因已从当前消息或历史中获知时调用；"
+            "补充订单号后沿用历史原因，无需重复确认。只有工具成功返回才能说明申请已提交。",
             RequestOrderCancellationArgs,
             action_handlers.request_order_cancellation,
         ),
