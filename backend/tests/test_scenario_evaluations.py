@@ -289,40 +289,47 @@ async def test_postgres_concurrency_isolated_and_replay_safe() -> None:
 
 
 @pytest.mark.anyio
-async def test_postgres_forced_request_race_exposes_duplicate_intents(
+async def test_postgres_concurrent_cancellation_reuses_one_intent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import asyncio
 
-    from app.approvals.service import ActionRequestService
+    from app.commerce.services import OrderService
 
     url = os.environ.get("EVAL_TEST_DATABASE_URL")
     if not url:
-        pytest.skip("set EVAL_TEST_DATABASE_URL for the forced read-before-write race")
-    original = ActionRequestService._find_active_order_action
+        pytest.skip("set EVAL_TEST_DATABASE_URL for concurrent cancellation regression")
+    original = OrderService.get_order
     barrier = asyncio.Barrier(2)
 
-    async def both_observe_absence(self: Any, kind: str, order: str) -> Any:
-        found = await original(self, kind, order)
-        if found is None:
-            await barrier.wait()
-        return found
+    async def simultaneous_order_lookup(
+        self: Any, context: Any, order: str, **kwargs: Any
+    ) -> Any:
+        # Synchronize BEFORE the order lock: a barrier after locking would deadlock.
+        await barrier.wait()
+        return await original(self, context, order, **kwargs)
 
-    monkeypatch.setattr(ActionRequestService, "_find_active_order_action", both_observe_absence)
+    monkeypatch.setattr(OrderService, "get_order", simultaneous_order_lookup)
     case = scenario("cancel_concurrent_sessions").model_copy(deep=True)
-    case.steps = case.steps[:1]
-    case.order_updates = {}
-    case.final_rows["pending_actions"][0]["status"] = "pending"
     engine = create_async_engine(url)
     try:
         result = await ScenarioHarness(
             engine, MockCommerceProvider(), provider_name="mock", model_name="mock"
         ).run(case)
         assert result.error is None, result.error
-        assert len(result.after["pending_actions"]) == 2
-        assert not result.verdict.checks["database:pending_actions"]
+        assert result.verdict.passed, result.verdict
+        assert len(result.after["pending_actions"]) == 1
         turns = [t for t in result.trajectory if t["actor"] == "agent"]
         assert len({t["backend_pid"] for t in turns}) == 2
         assert all(any("write_barrier_released_at" in c for c in t["model_calls"]) for t in turns)
+        outputs = [
+            event["output"]["data"]
+            for turn in turns
+            for event in turn["trace_events"]
+            if event["type"] == "tool" and event["name"] == "request_order_cancellation"
+        ]
+        assert len(outputs) == 2
+        assert len({output["action_id"] for output in outputs}) == 1
+        assert {output["request_state"] for output in outputs} == {"created", "already_pending"}
     finally:
         await engine.dispose()

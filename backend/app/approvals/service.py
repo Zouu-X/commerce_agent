@@ -67,7 +67,11 @@ class ActionRequestService:
         self._clock = clock
 
     async def request_cancellation(self, order_number: str, reason: str) -> PendingAction:
-        order = await OrderService(self._session).get_order(self._context, order_number)
+        # Lock the existing order, not the possibly absent action. Keep this lock
+        # through lookup/creation until the caller commits or rolls back the turn.
+        order = await OrderService(self._session).get_order(
+            self._context, order_number, for_update=True
+        )
         existing = await self._find_active_order_action(
             "cancel_order", order.order_number
         )

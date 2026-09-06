@@ -97,7 +97,9 @@ class OrderService:
         )
         return list((await self._session.scalars(statement)).unique().all())
 
-    async def get_order(self, context: CommerceContext, order_number: str) -> Order:
+    async def get_order(
+        self, context: CommerceContext, order_number: str, *, for_update: bool = False
+    ) -> Order:
         statement = self._with_details(
             select(Order).where(
                 Order.order_number == order_number,
@@ -106,6 +108,9 @@ class OrderService:
                 Order.customer_id == context.customer_id,
             )
         )
+        if for_update:
+            # Refresh any previously loaded order after waiting for a concurrent writer.
+            statement = statement.with_for_update().execution_options(populate_existing=True)
         order = await self._session.scalar(statement)
         if order is None:
             raise ResourceNotFoundError("order_not_found")

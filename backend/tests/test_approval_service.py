@@ -236,6 +236,27 @@ async def test_active_cancellation_is_reused_across_conversations(
     assert action_count == 1
 
 
+async def test_rejected_cancellation_allows_a_new_request(db_session: AsyncSession) -> None:
+    first = await ActionRequestService(
+        db_session, await tool_context(db_session, 0), clock=lambda: BASE_TIME
+    ).request_cancellation("AUR-202607-0001", "顾客不再需要")
+    await ApprovalService(db_session, approval_context(), clock=lambda: BASE_TIME).reject(
+        first.id, "需要顾客重新确认"
+    )
+    await db_session.commit()
+
+    next_context = replace(await tool_context(db_session, 0), trace_id=uuid4())
+    new_request = await ActionRequestService(
+        db_session, next_context, clock=lambda: BASE_TIME
+    ).request_cancellation("AUR-202607-0001", "顾客不再需要")
+
+    assert new_request.id != first.id
+    assert first.status == "rejected"
+    assert new_request.status == "pending"
+    order = await OrderService(db_session).get_order(commerce_context(0), "AUR-202607-0001")
+    assert order.status == "paid"
+
+
 @pytest.mark.parametrize("amount", [Decimal("10.001"), Decimal("0.001")])
 async def test_service_rejects_amounts_the_database_would_round(
     db_session: AsyncSession,

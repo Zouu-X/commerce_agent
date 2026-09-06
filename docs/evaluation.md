@@ -57,8 +57,10 @@ CLI、API 和控制台默认使用新场景集。旧基线不可与新场景通�
   cancelled 不够。Runner 在 session 开始与首次写工具边界设置 barrier，记录后端 PID 和起止时间。
 
 若真实模型没有走到写工具，不能把该 case 解释为已验证请求并发；它会失败。
-额外的 PostgreSQL 回归测试强制两个请求都先读到“没有申请”，稳定暴露当前幂等键包含
-conversation/trace 的重复申请问题。没有用 Mock 高分代替真实模型质量。
+PostgreSQL 回归测试在订单查询之前同步两个请求，验证两个连接最终返回同一申请 ID。
+取消申请现已在同一事务内先锁订单，再查询/创建有效申请，避免 conversation/trace 不同导致
+并发重复申请。修复与定向验收见 [Milestone 12](../logs/milestone-12-cancellation-concurrency.md)。
+没有用 Mock 高分代替真实模型质量。
 
 ## 用户状态机与 LLM 的边界
 
@@ -140,5 +142,6 @@ Trace events、审批轨迹、数据库 before/after 和各步骤的变化。隔
 - [新版 21-case 验收基线](./evals/stateful-agent-v2-20260905.md)：Mock 17/21，DeepSeek 15/21，保留真实失败。
 - [本次重构说明与失败分析](../logs/milestone-11-stateful-agent-evaluation.md)。
 
-当前没有把改进 Agent 行为或修复业务幂等逻辑混入评测重构。评测揭示的失败是后续改进目标，
-不是为了得到全绿而应当删除的 case。
+Milestone 11 没有把改进 Agent 行为或修复业务幂等逻辑混入评测重构；上述 21-case 基线保留原始结果。
+后续 Milestone 12 独立修复了取消申请并发去重，定向 Mock eval 为 1/1（22 项检查通过），
+不据此改写完整 21-case 基线，也没有删除失败 case。
